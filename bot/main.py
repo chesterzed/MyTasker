@@ -9,6 +9,7 @@ import logging
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramNetworkError
 from aiogram.types import BotCommand
@@ -50,9 +51,16 @@ async def main() -> None:
         model_name=config.whisper_model, device=config.whisper_device
     )
 
+    # Если задан TELEGRAM_PROXY — весь трафик к api.telegram.org идёт через него
+    # (aiohttp не использует системный/env-прокси автоматически, нужен явный).
+    session = AiohttpSession(proxy=config.telegram_proxy) if config.telegram_proxy else None
+    if config.telegram_proxy:
+        logger.info("Telegram через прокси: %s", config.telegram_proxy)
+
     bot = Bot(
         token=config.bot_token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+        session=session,
     )
     dp = Dispatcher(storage=SQLiteFSMStorage())
     dp["config"] = config
