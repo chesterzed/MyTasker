@@ -6,3 +6,4 @@ aiogram>=3.13
 APScheduler>=3.10
 tzdata>=2024.1
 pytest>=8.0
+faster-whisper>=1.0

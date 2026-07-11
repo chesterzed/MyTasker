@@ -21,6 +21,7 @@ MIDDAY_MINUTE = 0
 HISTORY_LIMIT = 30
 MAX_ACTIONS = 5
 TELEGRAM_MESSAGE_LIMIT = 4096
+MAX_VOICE_SECONDS = 300
 
 
 @dataclass(frozen=True)
@@ -29,6 +30,8 @@ class Config:
     fernet_master_key: str
     admin_telegram_id: int | None
     ollama_host: str
+    whisper_model: str
+    whisper_device: str
 
     @classmethod
     def load(cls) -> "Config":
@@ -45,10 +48,14 @@ class Config:
         admin_telegram_id = int(admin_raw) if admin_raw else None
 
         ollama_host = os.getenv("OLLAMA_HOST", "").strip() or "http://localhost:11434"
+        whisper_model = os.getenv("WHISPER_MODEL", "").strip() or "small"
+        whisper_device = os.getenv("WHISPER_DEVICE", "").strip() or "cpu"
 
         return cls(
             bot_token=bot_token,
             fernet_master_key=fernet_master_key,
             admin_telegram_id=admin_telegram_id,
             ollama_host=ollama_host,
+            whisper_model=whisper_model,
+            whisper_device=whisper_device,
         )

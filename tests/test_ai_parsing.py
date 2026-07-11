@@ -12,6 +12,7 @@ import pytest
 from bot.services import actions as actions_service
 from bot.services import repository as repo
 from bot.services.ai_orchestrator import parse_ai_response, parse_morning_response
+from db.migrate import apply_migrations
 
 
 # ── parse_ai_response ────────────────────────────────────────────
@@ -83,9 +84,8 @@ def test_morning_response_garbage():
 @pytest.fixture()
 def temp_db(tmp_path: Path, monkeypatch):
     db_path = tmp_path / "test.db"
-    schema = (Path(__file__).parent.parent / "db" / "schema.sql").read_text(encoding="utf-8")
     conn = sqlite3.connect(db_path)
-    conn.executescript(schema)
+    apply_migrations(conn)  # тот же раннер, что и в боевом коде
     conn.execute("INSERT INTO users (telegram_id) VALUES (111)")
     conn.execute("INSERT INTO goals (user_id, title) VALUES (1, 'Цель')")
     conn.execute(

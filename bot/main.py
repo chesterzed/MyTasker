@@ -13,6 +13,7 @@ from aiogram.enums import ParseMode
 from aiogram.types import BotCommand
 
 from ai.key_manager import KeyManager
+from ai.transcription import WhisperTranscriber
 from bot.config import Config
 from bot.fsm_storage import SQLiteFSMStorage
 from bot.handlers import build_root_router
@@ -44,6 +45,9 @@ async def main() -> None:
     init_db()  # идемпотентно
 
     key_manager = KeyManager(master_key=config.fernet_master_key)
+    transcriber = WhisperTranscriber(
+        model_name=config.whisper_model, device=config.whisper_device
+    )
 
     bot = Bot(
         token=config.bot_token,
@@ -52,6 +56,7 @@ async def main() -> None:
     dp = Dispatcher(storage=SQLiteFSMStorage())
     dp["config"] = config
     dp["key_manager"] = key_manager
+    dp["transcriber"] = transcriber
 
     user_middleware = UserMiddleware()
     dp.message.outer_middleware(user_middleware)

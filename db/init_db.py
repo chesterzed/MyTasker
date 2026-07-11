@@ -1,8 +1,8 @@
 """
 db/init_db.py
 
-Creates the AimTracker SQLite database and applies schema.sql.
-Safe to run multiple times (all DDL uses IF NOT EXISTS).
+Создаёт БД AimTracker и накатывает все миграции из db/migrations/.
+Безопасно запускать многократно (миграции идемпотентны через PRAGMA user_version).
 
 Usage:
     python db/init_db.py
@@ -10,40 +10,47 @@ Usage:
 from __future__ import annotations
 
 import sqlite3
+import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
+# позволяет запускать напрямую: `python db/init_db.py` (не только `python -m db.init_db`)
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from db.migrate import apply_migrations
+
 DB_PATH = PROJECT_ROOT / "data" / "aimtracker.db"
 
 
-def init_db(db_path: Path = DB_PATH, schema_path: Path = SCHEMA_PATH) -> None:
+def init_db(db_path: Path = DB_PATH) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    schema_sql = schema_path.read_text(encoding="utf-8")
 
     conn = sqlite3.connect(db_path)
     try:
-        conn.execute("PRAGMA foreign_keys = ON;")
-        conn.execute("PRAGMA journal_mode = WAL;")
-        conn.executescript(schema_sql)
-        conn.commit()
+        conn.execute("PRAGMA journal_mode = WAL;")  # снижает "database is locked"
+        applied = apply_migrations(conn)
     finally:
         conn.close()
 
-    print(f"Database initialized at {db_path}")
+    if applied:
+        print(f"Database at {db_path}: применено миграций {applied}")
+    else:
+        print(f"Database at {db_path}: применено миграций 0 (уже актуальна)")
     _verify(db_path)
 
 
 def _verify(db_path: Path) -> None:
     conn = sqlite3.connect(db_path)
     try:
+        version = conn.execute("PRAGMA user_version").fetchone()[0]
         rows = conn.execute(
             "SELECT name FROM sqlite_master "
             "WHERE type = 'table' AND name NOT LIKE 'sqlite_%' "
             "ORDER BY name;"
         ).fetchall()
         tables = [r[0] for r in rows]
-        print(f"Tables created ({len(tables)}): {', '.join(tables)}")
+        print(f"user_version={version}, таблиц {len(tables)}: {', '.join(tables)}")
     finally:
         conn.close()
 

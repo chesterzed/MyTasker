@@ -10,8 +10,8 @@ CREATE TABLE IF NOT EXISTS users (
     -- NULL = нет активной подписки (актуально только для role='user';
     -- role='admin' в коде приложения игнорирует эту проверку)
     subscription_until  TEXT,
-    ai_provider         TEXT NOT NULL DEFAULT 'claude' CHECK (ai_provider IN ('claude', 'ollama')),
-    ollama_model        TEXT,               -- обязателен только при ai_provider='ollama'
+    ai_provider         TEXT NOT NULL DEFAULT 'ollama' CHECK (ai_provider IN ('claude', 'ollama')),
+    ollama_model        TEXT DEFAULT 'qwen2.5:14b',               -- обязателен только при ai_provider='ollama'
     fsm_state           TEXT,
     fsm_context         TEXT,               -- JSON
     created_at          TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now'))
