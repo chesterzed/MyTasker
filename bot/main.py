@@ -10,6 +10,7 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramNetworkError
 from aiogram.types import BotCommand
 
 from ai.key_manager import KeyManager
@@ -69,7 +70,15 @@ async def main() -> None:
     scheduler_service.register_all_users()
     scheduler.start()
 
-    await bot.set_my_commands(BOT_COMMANDS)
+    # Меню команд — косметика: сбой сети здесь не должен ронять бота
+    # (сам polling переживает сетевые ошибки и ретраится сам)
+    try:
+        await bot.set_my_commands(BOT_COMMANDS)
+    except TelegramNetworkError:
+        logger.warning(
+            "Не удалось установить меню команд (сеть). Бот продолжит работу, "
+            "меню обновится при следующем успешном запуске."
+        )
 
     logger.info("AimTracker bot started")
     try:
