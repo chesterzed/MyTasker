@@ -32,6 +32,7 @@ class Config:
     ollama_host: str
     whisper_model: str
     whisper_device: str
+    telegram_proxy: str | None
 
     @classmethod
     def load(cls) -> "Config":
@@ -50,6 +51,9 @@ class Config:
         ollama_host = os.getenv("OLLAMA_HOST", "").strip() or "http://localhost:11434"
         whisper_model = os.getenv("WHISPER_MODEL", "").strip() or "small"
         whisper_device = os.getenv("WHISPER_DEVICE", "").strip() or "cpu"
+        # Прокси до api.telegram.org (нужен там, где Telegram недоступен напрямую).
+        # Примеры: socks5://127.0.0.1:2080  или  http://127.0.0.1:8080
+        telegram_proxy = os.getenv("TELEGRAM_PROXY", "").strip() or None
 
         return cls(
             bot_token=bot_token,
@@ -58,4 +62,5 @@ class Config:
             ollama_host=ollama_host,
             whisper_model=whisper_model,
             whisper_device=whisper_device,
+            telegram_proxy=telegram_proxy,
         )

@@ -7,3 +7,4 @@ APScheduler>=3.10
 tzdata>=2024.1
 pytest>=8.0
 faster-whisper>=1.0
+aiohttp-socks>=0.9
