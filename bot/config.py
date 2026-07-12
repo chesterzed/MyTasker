@@ -23,6 +23,12 @@ MAX_ACTIONS = 5
 TELEGRAM_MESSAGE_LIMIT = 4096
 MAX_VOICE_SECONDS = 300
 
+# Планирование дня: сколько всего минут задач в день считаем посильным (~8 часов)
+# и до какого часа местного времени по умолчанию имеет смысл добавлять задачи
+# на сегодня (порог редактируется на пользователя, колонка users.planning_cutoff_hour).
+DAILY_CAPACITY_MINUTES = 480
+DEFAULT_PLANNING_CUTOFF_HOUR = 21
+
 
 @dataclass(frozen=True)
 class Config:

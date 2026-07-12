@@ -16,7 +16,7 @@ from ai.base import BaseAIClient, ChatMessage
 from ai.claude_client import ClaudeClient
 from ai.key_manager import KeyManager, KeyManagerError
 from ai.ollama_client import OllamaClient
-from bot.config import HISTORY_LIMIT, MAX_ACTIONS, Config
+from bot.config import DAILY_CAPACITY_MINUTES, HISTORY_LIMIT, MAX_ACTIONS, Config
 from bot.services import prompts
 from bot.services import repository as repo
 from bot.utils import today_local, user_tz
@@ -68,6 +68,32 @@ def _goals_block(user_id: int) -> str:
     return "\n".join(lines)
 
 
+def _single_goal_block(goal: sqlite3.Row) -> str:
+    line = f"[goal_id={goal['id']}] {goal['title']}"
+    extras = []
+    if goal["priority"]:
+        extras.append(f"приоритет {goal['priority']}")
+    if goal["target_date"]:
+        extras.append(f"срок {goal['target_date']}")
+    if goal["description"]:
+        extras.append(goal["description"])
+    if extras:
+        line += " — " + ", ".join(extras)
+    return line
+
+
+def _today_tasks_estimates_block(user_id: int, date: str) -> str:
+    tasks = repo.list_tasks_for_date(user_id, date)
+    if not tasks:
+        return prompts.TASKS_EMPTY
+    lines = []
+    for t in tasks:
+        est = t["estimate_minutes"]
+        suffix = f" — ~{est} мин" if est else ""
+        lines.append(f"«{t['title']}» — {t['status']}{suffix}")
+    return "\n".join(lines)
+
+
 def _tasks_block(user_id: int, date: str) -> str:
     tasks = repo.list_tasks_for_date(user_id, date)
     if not tasks:
@@ -113,6 +139,21 @@ def build_morning_system_prompt(db_user: sqlite3.Row) -> str:
         weekday=weekday,
         goals_block=_goals_block(db_user["id"]),
         history_block=_history_block(db_user["id"]),
+    )
+
+
+def build_goal_task_system_prompt(
+    db_user: sqlite3.Row, goal: sqlite3.Row, remaining_minutes: int
+) -> str:
+    today, weekday = _today_weekday(db_user)
+    return prompts.SYSTEM_GOAL_TASK.format(
+        today=today,
+        weekday=weekday,
+        goal_block=_single_goal_block(goal),
+        today_tasks_block=_today_tasks_estimates_block(db_user["id"], today),
+        remaining_minutes=remaining_minutes,
+        capacity_minutes=DAILY_CAPACITY_MINUTES,
+        goal_id=goal["id"],
     )
 
 

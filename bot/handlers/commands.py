@@ -21,10 +21,25 @@ from bot.handlers.tasks import render_task_list
 from bot.keyboards import ProviderCb, provider_kb
 from bot.services import repository as repo
 from bot.services import scheduler as scheduler_service
-from bot.states import SetTimezone
-from bot.utils import today_local
+from bot.states import SetCutoff, SetTimezone
+from bot.utils import today_local, truncate
 
 router = Router(name="commands")
+
+
+def render_goal_list(goals: list[sqlite3.Row]) -> str:
+    lines = [texts.AIMS_HEADER]
+    for i, g in enumerate(goals, start=1):
+        meta = []
+        if g["priority"]:
+            meta.append(f"приоритет {g['priority']}")
+        if g["target_date"]:
+            meta.append(f"срок {html.escape(g['target_date'])}")
+        suffix = f" — {', '.join(meta)}" if meta else ""
+        lines.append(f"{i}. <b>{html.escape(g['title'])}</b>{suffix}")
+        if g["description"]:
+            lines.append(f"   <i>{html.escape(g['description'])}</i>")
+    return "\n".join(lines)
 
 
 @router.message(Command("start"), StateFilter("*"))
@@ -67,10 +82,41 @@ async def cmd_today(message: Message, db_user: sqlite3.Row) -> None:
     await message.answer(text, reply_markup=kb)
 
 
+@router.message(Command("aims"))
+async def cmd_aims(message: Message, db_user: sqlite3.Row) -> None:
+    goals = repo.list_active_goals(db_user["id"])
+    if not goals:
+        await message.answer(texts.AIMS_EMPTY)
+        return
+    await message.answer(truncate(render_goal_list(goals)))
+
+
 @router.message(Command("timezone"))
 async def cmd_timezone(message: Message, state: FSMContext) -> None:
     await state.set_state(SetTimezone.waiting_for_tz)
     await message.answer(texts.TIMEZONE_ASK)
+
+
+@router.message(Command("cutoff"))
+async def cmd_cutoff(message: Message, state: FSMContext) -> None:
+    await state.set_state(SetCutoff.waiting_for_hour)
+    await message.answer(texts.CUTOFF_ASK)
+
+
+@router.message(StateFilter(SetCutoff.waiting_for_hour), F.text)
+async def cutoff_received(message: Message, state: FSMContext, db_user: sqlite3.Row) -> None:
+    raw = message.text.strip()
+    try:
+        hour = int(raw)
+    except ValueError:
+        await message.answer(texts.CUTOFF_INVALID)
+        return
+    if not 0 <= hour <= 23:
+        await message.answer(texts.CUTOFF_INVALID)
+        return
+    repo.set_planning_cutoff_hour(db_user["id"], hour)
+    await state.clear()
+    await message.answer(texts.CUTOFF_SAVED.format(hour=hour))
 
 
 @router.message(StateFilter(SetTimezone.waiting_for_tz), F.text)

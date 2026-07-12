@@ -30,10 +30,12 @@ logger = logging.getLogger(__name__)
 BOT_COMMANDS = [
     BotCommand(command="start", description="Приветствие и регистрация"),
     BotCommand(command="addaim", description="Добавить цель"),
+    BotCommand(command="aims", description="Текущие цели"),
     BotCommand(command="today", description="Задачи на сегодня"),
     BotCommand(command="setkey", description="Настроить нейросеть"),
     BotCommand(command="provider", description="Переключить нейросеть"),
     BotCommand(command="timezone", description="Часовой пояс"),
+    BotCommand(command="cutoff", description="До какого часа планировать день"),
     BotCommand(command="cancel", description="Отменить текущий диалог"),
     BotCommand(command="help", description="Справка"),
 ]

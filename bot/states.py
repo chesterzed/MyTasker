@@ -20,5 +20,9 @@ class SetTimezone(StatesGroup):
     waiting_for_tz = State()             # /timezone → ждём IANA-таймзону
 
 
+class SetCutoff(StatesGroup):
+    waiting_for_hour = State()           # /cutoff → ждём час (0–23)
+
+
 class EditProposal(StatesGroup):
     waiting_for_correction = State()     # нажата «Изменить»; в data: {"pa_id": int}

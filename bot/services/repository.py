@@ -67,6 +67,13 @@ def set_timezone(user_id: int, tz: str) -> None:
         conn.execute("UPDATE users SET timezone = ? WHERE id = ?", (tz, user_id))
 
 
+def set_planning_cutoff_hour(user_id: int, hour: int) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE users SET planning_cutoff_hour = ? WHERE id = ?", (hour, user_id)
+        )
+
+
 def set_ai_provider(user_id: int, provider: str) -> None:
     with _connect() as conn:
         conn.execute("UPDATE users SET ai_provider = ? WHERE id = ?", (provider, user_id))
@@ -104,6 +111,13 @@ def list_active_goals(user_id: int) -> list[sqlite3.Row]:
         ).fetchall()
 
 
+def get_goal(user_id: int, goal_id: int) -> sqlite3.Row | None:
+    with _connect() as conn:
+        return conn.execute(
+            "SELECT * FROM goals WHERE id = ? AND user_id = ?", (goal_id, user_id)
+        ).fetchone()
+
+
 def goal_exists(user_id: int, goal_id: int) -> bool:
     with _connect() as conn:
         return (
@@ -124,6 +138,7 @@ def add_task(
     goal_id: int | None = None,
     source: str = "user",
     order_index: int | None = None,
+    estimate_minutes: int | None = None,
 ) -> int:
     with _connect() as conn:
         if order_index is None:
@@ -133,9 +148,10 @@ def add_task(
                 (user_id, date),
             ).fetchone()[0]
         cur = conn.execute(
-            "INSERT INTO tasks (user_id, goal_id, title, description, date, order_index, source) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (user_id, goal_id, title, description, date, order_index, source),
+            "INSERT INTO tasks "
+            "(user_id, goal_id, title, description, date, order_index, source, estimate_minutes) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (user_id, goal_id, title, description, date, order_index, source, estimate_minutes),
         )
         return cur.lastrowid
 

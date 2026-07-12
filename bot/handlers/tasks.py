@@ -29,7 +29,9 @@ def render_task_list(
     lines = [header]
     for i, task in enumerate(tasks, start=1):
         icon = _STATUS_ICONS.get(task["status"], "⬜")
-        lines.append(f"{icon} {i}. {html.escape(task['title'])}")
+        estimate = task["estimate_minutes"] if "estimate_minutes" in task.keys() else None
+        suffix = f" · ~{estimate} мин" if estimate else ""
+        lines.append(f"{icon} {i}. {html.escape(task['title'])}{suffix}")
     return "\n".join(lines), tasks_kb(tasks)
 
 
