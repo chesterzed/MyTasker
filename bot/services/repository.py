@@ -140,6 +140,12 @@ def update_goal(user_id: int, goal_id: int, fields: dict) -> None:
         )
 
 
+def delete_goal(user_id: int, goal_id: int) -> None:
+    """Физически удаляет цель; у связанных задач goal_id → NULL (ON DELETE SET NULL)."""
+    with _connect() as conn:
+        conn.execute("DELETE FROM goals WHERE id = ? AND user_id = ?", (goal_id, user_id))
+
+
 def goal_exists(user_id: int, goal_id: int) -> bool:
     with _connect() as conn:
         return (
@@ -183,6 +189,15 @@ def list_tasks_for_date(user_id: int, date: str) -> list[sqlite3.Row]:
         return conn.execute(
             "SELECT * FROM tasks WHERE user_id = ? AND date = ? ORDER BY order_index, id",
             (user_id, date),
+        ).fetchall()
+
+
+def list_all_tasks(user_id: int) -> list[sqlite3.Row]:
+    """Все задачи пользователя (все даты и статусы), по дате и порядку."""
+    with _connect() as conn:
+        return conn.execute(
+            "SELECT * FROM tasks WHERE user_id = ? ORDER BY date, order_index, id",
+            (user_id,),
         ).fetchall()
 
 

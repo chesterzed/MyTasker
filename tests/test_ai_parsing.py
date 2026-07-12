@@ -180,6 +180,32 @@ def test_validate_queries_list_goals_and_unknown_dropped():
     assert got == [{"name": "list_goals"}]
 
 
+def test_validate_queries_list_all_tasks():
+    got = queries_service.validate_queries([{"name": "list_all_tasks"}], {"timezone": "UTC"})
+    assert got == [{"name": "list_all_tasks"}]
+
+
+def test_list_all_tasks_repo_orders_across_dates(temp_db):
+    repo.add_task(1, title="Поздняя", date="2026-08-01")
+    repo.add_task(1, title="Ранняя", date="2026-06-01")
+    rows = repo.list_all_tasks(1)
+    dates = [r["date"] for r in rows]
+    assert dates == sorted(dates)                 # по возрастанию даты
+    titles = {r["title"] for r in rows}
+    assert {"Поздняя", "Ранняя"} <= titles        # обе даты попали в выборку
+
+
+def test_render_all_tasks_groups_by_date(temp_db):
+    from bot.handlers.tasks import render_all_tasks
+
+    repo.add_task(1, title="A", date="2026-06-01")
+    repo.add_task(1, title="B", date="2026-06-02")
+    text = render_all_tasks(repo.list_all_tasks(1), "<b>Все задачи:</b>")
+    assert "2026-06-01" in text and "2026-06-02" in text  # даты-подзаголовки
+    assert "⬜" in text                                    # иконка статуса
+    assert "add_task" not in text
+
+
 def test_validate_queries_cap():
     qs = [{"name": "list_goals"}] * 10
     got = queries_service.validate_queries(qs, {"timezone": "UTC"})
@@ -407,6 +433,36 @@ def test_delete_task_valid(temp_db):
 
 def test_delete_foreign_task_rejected(temp_db):
     assert actions_service.validate_action({"type": "delete_task", "task_id": 2}, 1) is None
+
+
+# ── delete_goal ──────────────────────────────────────────────────
+
+def test_delete_goal_valid(temp_db):
+    result = actions_service.validate_action({"type": "delete_goal", "goal_id": 1}, 1)
+    assert result == {"type": "delete_goal", "goal_id": 1}
+
+
+def test_delete_goal_foreign_rejected(temp_db):
+    # цель id=1 принадлежит пользователю 1 — пользователь 2 её не удалит
+    assert actions_service.validate_action({"type": "delete_goal", "goal_id": 1}, 2) is None
+
+
+def test_delete_goal_missing_id_rejected(temp_db):
+    assert actions_service.validate_action({"type": "delete_goal"}, 1) is None
+    assert actions_service.validate_action({"type": "delete_goal", "goal_id": "1"}, 1) is None
+
+
+def test_apply_delete_goal_removes_it(temp_db):
+    actions_service.apply_all(1, [{"type": "delete_goal", "goal_id": 1}])
+    assert repo.get_goal_by_id(1) is None
+
+
+def test_delete_goal_orphans_linked_task_not_removes(temp_db):
+    # задача, привязанная к цели, переживает удаление цели (goal_id → NULL)
+    task_id = repo.add_task(1, title="Связанная", date="2026-07-12", goal_id=1)
+    actions_service.apply_all(1, [{"type": "delete_goal", "goal_id": 1}])
+    task = repo.get_task(task_id)
+    assert task is not None and task["goal_id"] is None
 
 
 # ── apply_all с новыми типами (реальная запись в temp_db) ─────────

@@ -35,6 +35,21 @@ def render_task_list(
     return "\n".join(lines), tasks_kb(tasks)
 
 
+def render_all_tasks(tasks: list[sqlite3.Row], header: str) -> str:
+    """Read-only сводка всех задач, сгруппированная по датам (без клавиатуры).
+
+    tasks предполагаются отсортированными по date, order_index (см. list_all_tasks)."""
+    lines = [header]
+    current_date = None
+    for task in tasks:
+        if task["date"] != current_date:
+            current_date = task["date"]
+            lines.append(f"\n<b>{html.escape(current_date)}</b>")
+        icon = _STATUS_ICONS.get(task["status"], "⬜")
+        lines.append(f"{icon} {html.escape(task['title'])}")
+    return "\n".join(lines)
+
+
 @router.callback_query(TaskCb.filter())
 async def on_task_done(
     callback: CallbackQuery, callback_data: TaskCb, db_user: sqlite3.Row

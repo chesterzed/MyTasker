@@ -24,6 +24,7 @@ VALID_TYPES = {
     "complete_task",
     "reschedule",
     "update_goal",
+    "delete_goal",
     "update_task",
     "delete_task",
 }
@@ -81,10 +82,12 @@ def validate_action(action: dict, user_id: int) -> dict | None:
             "goal_id": goal_id,
         }
 
-    if type_ == "update_goal":
+    if type_ in ("update_goal", "delete_goal"):
         goal_id = action.get("goal_id")
         if not isinstance(goal_id, int) or not repo.goal_exists(user_id, goal_id):
             return None
+        if type_ == "delete_goal":
+            return {"type": "delete_goal", "goal_id": goal_id}
         fields = _collect_goal_fields(action)
         if not fields:
             return None
@@ -194,9 +197,11 @@ def render_action_line(action: dict) -> str:
         return texts.ACTION_ADD_TASK.format(
             title=html.escape(action["title"]), date=action["date"]
         )
-    if type_ == "update_goal":
+    if type_ in ("update_goal", "delete_goal"):
         goal = repo.get_goal_by_id(action["goal_id"])
         title = html.escape(goal["title"]) if goal else f"цель #{action['goal_id']}"
+        if type_ == "delete_goal":
+            return texts.ACTION_DELETE_GOAL.format(title=title)
         return texts.ACTION_UPDATE_GOAL.format(
             title=title, fields=_fields_summary(action["fields"], _GOAL_FIELD_RU)
         )
@@ -266,6 +271,11 @@ def apply_all(user_id: int, actions: list[dict]) -> list[str]:
             repo.update_goal(user_id, action["goal_id"], action["fields"])
             title = html.escape(goal["title"]) if goal else f"#{action['goal_id']}"
             results.append(texts.RESULT_GOAL_UPDATED.format(title=title))
+        elif type_ == "delete_goal":
+            goal = repo.get_goal_by_id(action["goal_id"])
+            title = html.escape(goal["title"]) if goal else f"#{action['goal_id']}"
+            repo.delete_goal(user_id, action["goal_id"])
+            results.append(texts.RESULT_GOAL_DELETED.format(title=title))
         elif type_ == "update_task":
             task = repo.get_task(action["task_id"])
             repo.update_task(user_id, action["task_id"], action["fields"])

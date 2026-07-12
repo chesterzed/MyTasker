@@ -15,7 +15,7 @@ from bot.utils import today_local
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 MAX_QUERIES = 5
 
-VALID_QUERIES = {"list_tasks", "list_goals"}
+VALID_QUERIES = {"list_tasks", "list_all_tasks", "list_goals"}
 
 
 def validate_queries(queries: list[dict], db_user: sqlite3.Row) -> list[dict]:
@@ -30,6 +30,8 @@ def validate_queries(queries: list[dict], db_user: sqlite3.Row) -> list[dict]:
             if not (isinstance(date, str) and _DATE_RE.match(date)):
                 date = today_local(db_user)  # дефолт — сегодня
             out.append({"name": "list_tasks", "date": date})
+        elif name == "list_all_tasks":
+            out.append({"name": "list_all_tasks"})
         elif name == "list_goals":
             out.append({"name": "list_goals"})
     return out

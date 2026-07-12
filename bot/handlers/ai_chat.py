@@ -43,7 +43,7 @@ async def _run_query(message: Message, db_user: sqlite3.Row, query: dict) -> Non
     """Выполнить read-запрос и показать список (диспатч по query['name'])."""
     # deferred-импорт форматтеров — как в scheduler, чтобы не плодить циклы
     from bot.handlers.commands import render_goal_list
-    from bot.handlers.tasks import render_task_list
+    from bot.handlers.tasks import render_all_tasks, render_task_list
 
     name = query["name"]
     if name == "list_tasks":
@@ -56,6 +56,13 @@ async def _run_query(message: Message, db_user: sqlite3.Row, query: dict) -> Non
             tasks, texts.TASKS_ON_DATE_HEADER.format(date=html.escape(date))
         )
         await message.answer(truncate(text), reply_markup=kb)
+    elif name == "list_all_tasks":
+        tasks = repo.list_all_tasks(db_user["id"])
+        await message.answer(
+            texts.ALL_TASKS_EMPTY
+            if not tasks
+            else truncate(render_all_tasks(tasks, texts.ALL_TASKS_HEADER))
+        )
     elif name == "list_goals":
         goals = repo.list_active_goals(db_user["id"])
         await message.answer(

@@ -49,6 +49,8 @@ AIMS_EMPTY = "У тебя пока нет целей. Добавь первую:
 # read-запросы (list_tasks по дате)
 TASKS_ON_DATE_HEADER = "<b>Задачи на {date}:</b>"
 TASKS_ON_DATE_EMPTY = "На {date} задач нет."
+ALL_TASKS_HEADER = "<b>Все твои задачи:</b>"
+ALL_TASKS_EMPTY = "У тебя пока нет задач."
 
 # /today
 TODAY_HEADER = "<b>Задачи на сегодня:</b>"
@@ -126,6 +128,7 @@ ACTION_ADD_TASK = "📌 Задача на {date}: «{title}»"
 ACTION_COMPLETE_TASK = "✅ Отметить выполненной: «{title}»"
 ACTION_RESCHEDULE = "📅 Перенести «{title}» на {date}"
 ACTION_UPDATE_GOAL = "✏️ Изменить цель «{title}» ({fields})"
+ACTION_DELETE_GOAL = "🗑 Удалить цель «{title}»"
 ACTION_UPDATE_TASK = "✏️ Изменить задачу «{title}» ({fields})"
 ACTION_DELETE_TASK = "🗑 Удалить задачу «{title}»"
 
@@ -134,6 +137,7 @@ RESULT_TASK_ADDED = "📌 Задача «{title}» добавлена на {date
 RESULT_TASK_COMPLETED = "✅ «{title}» отмечена выполненной"
 RESULT_TASK_RESCHEDULED = "📅 «{title}» перенесена на {date}"
 RESULT_GOAL_UPDATED = "✏️ Цель «{title}» обновлена"
+RESULT_GOAL_DELETED = "🗑 Цель «{title}» удалена"
 RESULT_TASK_UPDATED = "✏️ Задача «{title}» обновлена"
 RESULT_TASK_DELETED = "🗑 Задача «{title}» удалена"
 
