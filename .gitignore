@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+logs/
 vcs.xml
 *.db-shm
 *.db-wal
