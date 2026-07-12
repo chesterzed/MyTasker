@@ -12,7 +12,6 @@ from __future__ import annotations
 import html
 import logging
 import sqlite3
-from collections import Counter
 
 from aiogram import F, Router
 from aiogram.filters import StateFilter
@@ -49,7 +48,9 @@ async def deliver_ai_response(
 
     if not valid_actions:
         await message.answer(truncate(html.escape(parsed.reply)))
-        repo.log_message(db_user["id"], "assistant", parsed.reply)
+        repo.log_message(
+            db_user["id"], "assistant", orchestrator.assistant_turn_json(parsed.reply, [])
+        )
         return
 
     type_ = valid_actions[0]["type"] if len(valid_actions) == 1 else "bulk_add"
@@ -62,10 +63,10 @@ async def deliver_ai_response(
     sent = await message.answer(truncate("\n".join(lines)), reply_markup=proposal_kb(pa_id))
     repo.set_pending_message_id(pa_id, sent.message_id)
 
-    counter = Counter(a["type"] for a in valid_actions)
-    marker = ", ".join(f"{t}×{n}" if n > 1 else t for t, n in counter.items())
     repo.log_message(
-        db_user["id"], "assistant", f"{parsed.reply}\n[предложены действия: {marker}]"
+        db_user["id"],
+        "assistant",
+        orchestrator.assistant_turn_json(parsed.reply, valid_actions),
     )
 
 

@@ -181,6 +181,15 @@ class ParsedResponse:
     actions: list[dict] = field(default_factory=list)
 
 
+def assistant_turn_json(reply: str, actions: list[dict]) -> str:
+    """Канонический вид ассистентского хода для messages_log/истории.
+
+    В истории модель должна видеть свои прошлые ходы в ТОМ ЖЕ формате, что
+    обязана выдавать (строгий JSON-контракт) — иначе она имитирует прозу из
+    истории и перестаёт эмитить actions (тогда кнопки не показываются)."""
+    return json.dumps({"reply": reply, "actions": actions}, ensure_ascii=False)
+
+
 def _extract_json(raw: str) -> dict | None:
     text = _FENCE_RE.sub("", raw.strip()).strip()
     if not text.startswith("{"):

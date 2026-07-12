@@ -130,7 +130,12 @@ async def correction_received(
     # История + старое предложение + правка → новый полный набор действий
     history = orchestrator.build_history(db_user["id"])
     history.append(
-        ChatMessage(role="assistant", content=json.dumps(payload, ensure_ascii=False))
+        ChatMessage(
+            role="assistant",
+            content=orchestrator.assistant_turn_json(
+                payload.get("reply", ""), payload.get("actions", [])
+            ),
+        )
     )
     history.append(
         ChatMessage(role="user", content=prompts.REVISION_INSTRUCTION.format(correction=correction))

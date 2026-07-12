@@ -11,7 +11,11 @@ import pytest
 
 from bot.services import actions as actions_service
 from bot.services import repository as repo
-from bot.services.ai_orchestrator import parse_ai_response, parse_morning_response
+from bot.services.ai_orchestrator import (
+    assistant_turn_json,
+    parse_ai_response,
+    parse_morning_response,
+)
 from db.migrate import apply_migrations
 
 
@@ -27,6 +31,26 @@ def test_valid_json():
     raw = '{"reply": "Привет!", "actions": []}'
     parsed = parse_ai_response(raw)
     assert parsed.reply == "Привет!"
+    assert parsed.actions == []
+
+
+# ── assistant_turn_json: история должна быть в JSON-контракте ─────
+
+def test_assistant_turn_json_roundtrip():
+    actions = [{"type": "add_task", "title": "Загрузить документы", "date": "2026-07-13"}]
+    stored = assistant_turn_json("Добавил задачу на завтра.", actions)
+    # то, что уходит в messages_log, само разбирается обратно в тот же контракт
+    parsed = parse_ai_response(stored)
+    assert parsed.reply == "Добавил задачу на завтра."
+    assert parsed.actions == actions
+    # никакой прозаической метки, которую модель могла бы спарротить
+    assert "[предложены действия" not in stored
+
+
+def test_assistant_turn_json_empty_actions():
+    stored = assistant_turn_json("Обычный ответ.", [])
+    parsed = parse_ai_response(stored)
+    assert parsed.reply == "Обычный ответ."
     assert parsed.actions == []
 
 
