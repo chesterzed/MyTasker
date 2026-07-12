@@ -54,6 +54,58 @@ def test_assistant_turn_json_empty_actions():
     assert parsed.actions == []
 
 
+# ── пустой reply + actions: сырой JSON не должен утекать в чат ────
+
+def test_empty_reply_keeps_actions():
+    raw = '{"reply": "", "actions": [{"type": "add_task", "title": "Занести документы", "date": "2026-07-13"}]}'
+    parsed = parse_ai_response(raw)
+    # действие сохранено, а сырой JSON НЕ попал в reply (иначе — баг со скриншота)
+    assert parsed.reply == ""
+    assert parsed.actions == [
+        {"type": "add_task", "title": "Занести документы", "date": "2026-07-13"}
+    ]
+
+
+def test_whitespace_reply_keeps_actions():
+    raw = '{"reply": "   ", "actions": [{"type": "complete_task", "task_id": 5}]}'
+    parsed = parse_ai_response(raw)
+    assert parsed.reply == ""
+    assert parsed.actions == [{"type": "complete_task", "task_id": 5}]
+
+
+def test_empty_reply_no_actions_falls_back_to_raw():
+    raw = '{"reply": "", "actions": []}'
+    parsed = parse_ai_response(raw)
+    # пустое сообщение в Telegram отправлять нельзя — фолбэк на сырой текст
+    assert parsed.reply == raw
+    assert parsed.actions == []
+
+
+# ── смешанный ответ «текст + JSON» ───────────────────────────────
+
+def test_prose_prefix_before_json():
+    parsed = parse_ai_response('Хорошо! {"reply": "ок", "actions": []}')
+    assert parsed.reply == "ок"
+    assert parsed.actions == []
+
+
+def test_prose_suffix_after_json():
+    parsed = parse_ai_response('{"reply": "ок", "actions": []} Готово')
+    assert parsed.reply == "ок"
+
+
+def test_decoy_brace_in_prose_before_json():
+    # скобка-обманка в прозе не должна ломать извлечение настоящего JSON
+    parsed = parse_ai_response('Вот {заметка}: {"reply": "ок", "actions": []}')
+    assert parsed.reply == "ок"
+
+
+def test_plain_prose_no_json_stays_reply():
+    parsed = parse_ai_response("Просто текст без всякого JSON")
+    assert parsed.reply == "Просто текст без всякого JSON"
+    assert parsed.actions == []
+
+
 def test_json_with_actions():
     raw = '{"reply": "Добавляю", "actions": [{"type": "add_task", "title": "X", "date": "2026-07-12"}]}'
     parsed = parse_ai_response(raw)

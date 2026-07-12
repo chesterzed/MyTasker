@@ -191,31 +191,42 @@ def assistant_turn_json(reply: str, actions: list[dict]) -> str:
 
 
 def _extract_json(raw: str) -> dict | None:
+    """Достаёт первый валидный JSON-объект из ответа модели, даже если он
+    окружён прозой. Сканируем от каждой «{» через raw_decode (парсит один
+    JSON-документ и игнорирует хвост); скобки-«обманки» в прозе пропускаем."""
     text = _FENCE_RE.sub("", raw.strip()).strip()
-    if not text.startswith("{"):
-        start, end = text.find("{"), text.rfind("}")
-        if start == -1 or end <= start:
-            return None
-        text = text[start : end + 1]
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        return None
-    return data if isinstance(data, dict) else None
+    decoder = json.JSONDecoder()
+    idx = text.find("{")
+    while idx != -1:
+        try:
+            obj, _ = decoder.raw_decode(text, idx)
+        except json.JSONDecodeError:
+            idx = text.find("{", idx + 1)
+            continue
+        if isinstance(obj, dict):
+            return obj
+        idx = text.find("{", idx + 1)
+    return None
 
 
 def parse_ai_response(raw: str) -> ParsedResponse:
-    """Никогда не роняет диалог: при любой неудаче весь текст — обычный reply."""
+    """Никогда не роняет диалог. Сырой текст уходит в reply только если это не
+    JSON ЛИБО JSON пуст и без действий (иначе actions сохраняем, даже при пустом
+    reply — иначе валидные действия терялись бы, а в чат летел сырой JSON)."""
     data = _extract_json(raw)
     if data is None:
         return ParsedResponse(reply=raw.strip())
+    actions_raw = data.get("actions")
+    actions = (
+        [a for a in actions_raw if isinstance(a, dict)]
+        if isinstance(actions_raw, list)
+        else []
+    )
     reply = data.get("reply")
-    if not isinstance(reply, str) or not reply.strip():
+    reply = reply.strip() if isinstance(reply, str) else ""
+    if not reply and not actions:
         return ParsedResponse(reply=raw.strip())
-    actions = data.get("actions")
-    if not isinstance(actions, list):
-        actions = []
-    return ParsedResponse(reply=reply.strip(), actions=[a for a in actions if isinstance(a, dict)])
+    return ParsedResponse(reply=reply, actions=actions)
 
 
 def parse_morning_response(raw: str) -> list[dict]:

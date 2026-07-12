@@ -57,7 +57,10 @@ async def deliver_ai_response(
     payload = {"actions": valid_actions, "reply": parsed.reply, "source_text": source_text}
     pa_id = repo.create_pending_action(db_user["id"], type_, payload)
 
-    lines = [html.escape(parsed.reply), "", texts.PROPOSAL_HEADER]
+    lines = []
+    if parsed.reply:
+        lines += [html.escape(parsed.reply), ""]
+    lines.append(texts.PROPOSAL_HEADER)
     for i, action in enumerate(valid_actions, start=1):
         lines.append(f"{i}. {actions_service.render_action_line(action)}")
     sent = await message.answer(truncate("\n".join(lines)), reply_markup=proposal_kb(pa_id))
