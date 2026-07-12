@@ -118,6 +118,28 @@ def get_goal(user_id: int, goal_id: int) -> sqlite3.Row | None:
         ).fetchone()
 
 
+def get_goal_by_id(goal_id: int) -> sqlite3.Row | None:
+    with _connect() as conn:
+        return conn.execute("SELECT * FROM goals WHERE id = ?", (goal_id,)).fetchone()
+
+
+_GOAL_UPDATABLE = ("title", "description", "priority", "target_date", "status")
+
+
+def update_goal(user_id: int, goal_id: int, fields: dict) -> None:
+    """Частичное обновление цели: меняются только переданные (уже провалидированные)
+    колонки из белого списка. Скоуп по user_id — чужую цель не тронуть."""
+    cols = [k for k in fields if k in _GOAL_UPDATABLE]
+    if not cols:
+        return
+    set_clause = ", ".join(f"{c} = ?" for c in cols)
+    values = [fields[c] for c in cols] + [goal_id, user_id]
+    with _connect() as conn:
+        conn.execute(
+            f"UPDATE goals SET {set_clause} WHERE id = ? AND user_id = ?", values
+        )
+
+
 def goal_exists(user_id: int, goal_id: int) -> bool:
     with _connect() as conn:
         return (
@@ -180,6 +202,29 @@ def mark_task_done(task_id: int) -> None:
 def set_task_date(task_id: int, new_date: str) -> None:
     with _connect() as conn:
         conn.execute("UPDATE tasks SET date = ? WHERE id = ?", (new_date, task_id))
+
+
+_TASK_UPDATABLE = ("title", "description", "estimate_minutes")
+
+
+def update_task(user_id: int, task_id: int, fields: dict) -> None:
+    """Частичное обновление задачи (title/description/estimate_minutes), скоуп по user_id."""
+    cols = [k for k in fields if k in _TASK_UPDATABLE]
+    if not cols:
+        return
+    set_clause = ", ".join(f"{c} = ?" for c in cols)
+    values = [fields[c] for c in cols] + [task_id, user_id]
+    with _connect() as conn:
+        conn.execute(
+            f"UPDATE tasks SET {set_clause} WHERE id = ? AND user_id = ?", values
+        )
+
+
+def delete_task(user_id: int, task_id: int) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "DELETE FROM tasks WHERE id = ? AND user_id = ?", (task_id, user_id)
+        )
 
 
 def recent_task_history(user_id: int, days: int = 7) -> list[sqlite3.Row]:

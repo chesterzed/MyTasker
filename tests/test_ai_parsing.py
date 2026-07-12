@@ -176,3 +176,97 @@ def test_max_actions_cap(temp_db):
     ]
     valid = actions_service.validate_actions(actions, 1)
     assert len(valid) == 5
+
+
+# ── update_goal / update_task / delete_task ──────────────────────
+
+def test_update_goal_valid(temp_db):
+    action = {"type": "update_goal", "goal_id": 1, "priority": 5, "status": "paused"}
+    result = actions_service.validate_action(action, 1)
+    assert result["type"] == "update_goal"
+    assert result["goal_id"] == 1
+    assert result["fields"] == {"priority": 5, "status": "paused"}
+
+
+def test_update_goal_archive(temp_db):
+    result = actions_service.validate_action(
+        {"type": "update_goal", "goal_id": 1, "status": "archived"}, 1
+    )
+    assert result["fields"] == {"status": "archived"}
+
+
+def test_update_goal_no_fields_rejected(temp_db):
+    assert actions_service.validate_action({"type": "update_goal", "goal_id": 1}, 1) is None
+
+
+def test_update_goal_bad_status_dropped(temp_db):
+    # неизвестный статус выбрасывается; раз других полей нет — действие невалидно
+    assert (
+        actions_service.validate_action(
+            {"type": "update_goal", "goal_id": 1, "status": "deleted"}, 1
+        )
+        is None
+    )
+
+
+def test_update_goal_foreign_rejected(temp_db):
+    # цель id=1 принадлежит пользователю 1; пользователь 2 её не тронет
+    assert (
+        actions_service.validate_action(
+            {"type": "update_goal", "goal_id": 1, "priority": 3}, 2
+        )
+        is None
+    )
+
+
+def test_update_task_valid(temp_db):
+    action = {"type": "update_task", "task_id": 1, "title": "Новое имя", "estimate_minutes": 45}
+    result = actions_service.validate_action(action, 1)
+    assert result["fields"] == {"title": "Новое имя", "estimate_minutes": 45}
+
+
+def test_update_task_bad_estimate_dropped(temp_db):
+    assert (
+        actions_service.validate_action(
+            {"type": "update_task", "task_id": 1, "estimate_minutes": -5}, 1
+        )
+        is None
+    )
+
+
+def test_update_task_foreign_rejected(temp_db):
+    # задача id=2 принадлежит пользователю 2
+    assert (
+        actions_service.validate_action(
+            {"type": "update_task", "task_id": 2, "title": "X"}, 1
+        )
+        is None
+    )
+
+
+def test_delete_task_valid(temp_db):
+    result = actions_service.validate_action({"type": "delete_task", "task_id": 1}, 1)
+    assert result == {"type": "delete_task", "task_id": 1}
+
+
+def test_delete_foreign_task_rejected(temp_db):
+    assert actions_service.validate_action({"type": "delete_task", "task_id": 2}, 1) is None
+
+
+# ── apply_all с новыми типами (реальная запись в temp_db) ─────────
+
+def test_apply_update_and_delete(temp_db):
+    actions = [
+        {"type": "update_goal", "goal_id": 1, "fields": {"priority": 7, "status": "paused"}},
+        {"type": "update_task", "task_id": 1, "fields": {"title": "Переименована"}},
+    ]
+    results = actions_service.apply_all(1, actions)
+    assert len(results) == 2
+
+    goal = repo.get_goal_by_id(1)
+    assert goal["priority"] == 7 and goal["status"] == "paused"
+    task = repo.get_task(1)
+    assert task["title"] == "Переименована"
+
+    actions_service.apply_all(1, [{"type": "delete_task", "task_id": 1}])
+    assert repo.get_task(1) is None
