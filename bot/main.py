@@ -6,7 +6,9 @@ bot/main.py
 from __future__ import annotations
 
 import logging
+import ssl
 
+import certifi
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
@@ -56,6 +58,13 @@ async def main() -> None:
     session = AiohttpSession(proxy=config.telegram_proxy) if config.telegram_proxy else None
     if config.telegram_proxy:
         logger.info("Telegram через прокси: %s", config.telegram_proxy)
+        # aiogram при настройке прокси-коннектора теряет свой явный certifi-контекст
+        # (aiohttp_socks.ProxyConnector создаётся без "ssl" и падает на дефолтный
+        # OpenSSL-стор хоста, который может быть неполным/битым) — возвращаем вручную.
+        try:
+            session._connector_init["ssl"] = ssl.create_default_context(cafile=certifi.where())
+        except AttributeError:
+            logger.warning("Не удалось выставить SSL-контекст для прокси-сессии aiogram")
 
     bot = Bot(
         token=config.bot_token,
