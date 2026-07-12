@@ -21,7 +21,7 @@ from ai.base import ChatMessage
 from ai.key_manager import KeyManager
 from bot import texts
 from bot.config import Config
-from bot.keyboards import PendingActionCb
+from bot.keyboards import PendingActionCb, proposal_kb
 from bot.services import actions as actions_service
 from bot.services import ai_orchestrator as orchestrator
 from bot.services import prompts
@@ -53,25 +53,75 @@ async def _edit_source_message(
         pass
 
 
-@router.callback_query(PendingActionCb.filter(F.action == "confirm"))
-async def on_confirm(
+async def _rerender(callback: CallbackQuery, payload: dict, pa_id: int) -> None:
+    """Перерисовать сообщение-предложение на месте под текущий прогресс payload."""
+    text = actions_service.render_proposal_text(payload)
+    kb = proposal_kb(pa_id, payload["actions"], payload.get("done", []))
+    try:
+        await callback.message.edit_text(truncate(text), reply_markup=kb)
+    except TelegramBadRequest:
+        pass
+
+
+async def _stale(callback: CallbackQuery) -> None:
+    await callback.answer(texts.STALE_PROPOSAL)
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except TelegramBadRequest:
+        pass
+
+
+@router.callback_query(PendingActionCb.filter(F.action == "apply"))
+async def on_apply(
     callback: CallbackQuery, callback_data: PendingActionCb, db_user: sqlite3.Row
 ) -> None:
     pa = _load_valid_pending(callback_data.pa_id, db_user, "pending")
     if pa is None:
-        await callback.answer(texts.STALE_PROPOSAL)
-        try:
-            await callback.message.edit_reply_markup(reply_markup=None)
-        except TelegramBadRequest:
-            pass
+        await _stale(callback)
         return
 
     payload = json.loads(pa["payload"])
-    results = actions_service.apply_all(db_user["id"], payload["actions"])
+    actions = payload["actions"]
+    done = payload.setdefault("done", [False] * len(actions))
+    idx = callback_data.idx
+    if idx < 0 or idx >= len(actions):
+        await callback.answer(texts.STALE_PROPOSAL)
+        return
+    if done[idx]:
+        await callback.answer(texts.ACTION_ALREADY_APPLIED)
+        return
+
+    actions_service.apply_all(db_user["id"], [actions[idx]])
+    done[idx] = True
+    if all(done):
+        repo.resolve_pending(pa["id"], "confirmed")
+    else:
+        repo.update_pending_payload(pa["id"], payload)
+
+    await _rerender(callback, payload, pa["id"])
+    await callback.answer(texts.ACTION_APPLIED_ANSWER)
+
+
+@router.callback_query(PendingActionCb.filter(F.action == "all"))
+async def on_apply_all(
+    callback: CallbackQuery, callback_data: PendingActionCb, db_user: sqlite3.Row
+) -> None:
+    pa = _load_valid_pending(callback_data.pa_id, db_user, "pending")
+    if pa is None:
+        await _stale(callback)
+        return
+
+    payload = json.loads(pa["payload"])
+    actions = payload["actions"]
+    done = payload.setdefault("done", [False] * len(actions))
+    remaining = [a for a, d in zip(actions, done) if not d]
+    if remaining:
+        actions_service.apply_all(db_user["id"], remaining)
+    payload["done"] = [True] * len(actions)
     repo.resolve_pending(pa["id"], "confirmed")
 
-    await _edit_source_message(callback, texts.PROPOSAL_APPLIED + ":\n" + "\n".join(results))
-    await callback.answer()
+    await _rerender(callback, payload, pa["id"])
+    await callback.answer(texts.ACTION_APPLIED_ANSWER)
 
 
 @router.callback_query(PendingActionCb.filter(F.action == "reject"))
@@ -80,10 +130,15 @@ async def on_reject(
 ) -> None:
     pa = _load_valid_pending(callback_data.pa_id, db_user, "pending")
     if pa is None:
-        await callback.answer(texts.STALE_PROPOSAL)
+        await _stale(callback)
         return
     repo.resolve_pending(pa["id"], "rejected")
-    await _edit_source_message(callback, texts.PROPOSAL_REJECTED)
+    payload = json.loads(pa["payload"])
+    text = actions_service.render_proposal_text(payload) + "\n\n" + texts.PROPOSAL_REJECTED
+    try:
+        await callback.message.edit_text(truncate(text), reply_markup=None)
+    except TelegramBadRequest:
+        pass
     await callback.answer()
 
 

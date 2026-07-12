@@ -46,6 +46,10 @@ ADDAIM_TASKS_HEADER = "<b>Обновил задачи на сегодня:</b>"
 AIMS_HEADER = "<b>Твои цели:</b>"
 AIMS_EMPTY = "У тебя пока нет целей. Добавь первую: /addaim"
 
+# read-запросы (list_tasks по дате)
+TASKS_ON_DATE_HEADER = "<b>Задачи на {date}:</b>"
+TASKS_ON_DATE_EMPTY = "На {date} задач нет."
+
 # /today
 TODAY_HEADER = "<b>Задачи на сегодня:</b>"
 TODAY_EMPTY = (
@@ -109,9 +113,12 @@ PROPOSAL_REJECTED = "❌ Отклонено"
 PROPOSAL_EDIT_ASK = "✏️ Напиши, что изменить в этом плане:"
 STALE_PROPOSAL = "Это предложение уже неактуально."
 
-BTN_CONFIRM = "✅ Подтвердить"
+BTN_CONFIRM_ALL = "✅ Подтвердить все"
 BTN_REJECT = "❌ Отклонить"
 BTN_EDIT = "✏️ Изменить"
+
+ACTION_APPLIED_ANSWER = "Готово ✅"
+ACTION_ALREADY_APPLIED = "Уже применено"
 
 # Действия (рендер для пользователя)
 ACTION_ADD_GOAL = "➕ Цель: «{title}»"

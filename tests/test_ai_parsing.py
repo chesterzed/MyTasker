@@ -10,9 +10,11 @@ from pathlib import Path
 import pytest
 
 from bot.services import actions as actions_service
+from bot.services import queries as queries_service
 from bot.services import repository as repo
 from bot.services.ai_orchestrator import (
     assistant_turn_json,
+    build_history,
     parse_ai_response,
     parse_morning_response,
 )
@@ -104,6 +106,84 @@ def test_plain_prose_no_json_stays_reply():
     parsed = parse_ai_response("Просто текст без всякого JSON")
     assert parsed.reply == "Просто текст без всякого JSON"
     assert parsed.actions == []
+
+
+# ── render_proposal_text: статус + отсутствие сырых типов ────────
+
+def test_render_proposal_text_marks_done_and_hides_types():
+    payload = {
+        "reply": "Готово",
+        "actions": [
+            {"type": "add_goal", "title": "Цель А"},
+            {"type": "add_task", "title": "Задача Б", "date": "2026-07-13"},
+        ],
+        "done": [True, False],
+    }
+    text = actions_service.render_proposal_text(payload)
+    assert "add_goal" not in text and "add_task" not in text
+    assert "✅ 1." in text          # применённое отмечено
+    assert "2. " in text and "✅ 2." not in text  # второе ещё не применено
+    assert "Готово" in text
+
+
+# ── build_history: старый маркер [предложены действия] вырезается ─
+
+def test_build_history_strips_action_marker(temp_db):
+    repo.log_message(1, "user", "привет")
+    repo.log_message(1, "assistant", "Ок.\n[предложены действия: add_goal]")
+    history = build_history(1)
+    assert history[-1].content == "Ок."
+    assert "предложены действия" not in history[-1].content
+
+
+# ── read-запросы (queries) ───────────────────────────────────────
+
+def test_parse_extracts_queries():
+    raw = '{"reply": "Вот задачи", "actions": [], "queries": [{"name": "list_tasks", "date": "2026-07-13"}]}'
+    parsed = parse_ai_response(raw)
+    assert parsed.reply == "Вот задачи"
+    assert parsed.queries == [{"name": "list_tasks", "date": "2026-07-13"}]
+
+
+def test_parse_empty_reply_with_queries_kept():
+    raw = '{"reply": "", "actions": [], "queries": [{"name": "list_goals"}]}'
+    parsed = parse_ai_response(raw)
+    # пустой reply + queries НЕ должен ронять парсер в сырой дамп
+    assert parsed.reply == ""
+    assert parsed.queries == [{"name": "list_goals"}]
+
+
+def test_validate_queries_valid_date():
+    q = queries_service.validate_queries(
+        [{"name": "list_tasks", "date": "2026-07-13"}], {"timezone": "UTC"}
+    )
+    assert q == [{"name": "list_tasks", "date": "2026-07-13"}]
+
+
+def test_validate_queries_missing_or_bad_date_defaults_to_today():
+    from bot.utils import today_local
+
+    user = {"timezone": "UTC"}
+    today = today_local(user)
+    assert queries_service.validate_queries([{"name": "list_tasks"}], user) == [
+        {"name": "list_tasks", "date": today}
+    ]
+    assert queries_service.validate_queries(
+        [{"name": "list_tasks", "date": "завтра"}], user
+    ) == [{"name": "list_tasks", "date": today}]
+
+
+def test_validate_queries_list_goals_and_unknown_dropped():
+    got = queries_service.validate_queries(
+        [{"name": "drop_table"}, {"name": "list_goals"}], {"timezone": "UTC"}
+    )
+    assert got == [{"name": "list_goals"}]
+
+
+def test_validate_queries_cap():
+    qs = [{"name": "list_goals"}] * 10
+    got = queries_service.validate_queries(qs, {"timezone": "UTC"})
+    assert len(got) == queries_service.MAX_QUERIES
 
 
 def test_json_with_actions():

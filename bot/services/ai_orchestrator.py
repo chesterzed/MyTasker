@@ -26,6 +26,9 @@ _WEEKDAYS_RU = [
 ]
 
 _FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
+# Старый служебный маркер в логах ассистента — вырезаем из истории, чтобы модель
+# его не видела и не парротила (см. переход на assistant_turn_json).
+_ACTION_MARKER_RE = re.compile(r"\n?\[предложены действия:[^\]]*\]")
 
 
 class ClientConfigError(Exception):
@@ -162,12 +165,15 @@ def build_history(user_id: int, limit: int = HISTORY_LIMIT) -> list[ChatMessage]
     первое сообщение — user (подряд идущие одинаковые роли сливаются)."""
     merged: list[ChatMessage] = []
     for row in repo.recent_messages(user_id, limit):
+        text = row["text"]
+        if row["role"] == "assistant":
+            text = _ACTION_MARKER_RE.sub("", text)
         if merged and merged[-1].role == row["role"]:
             merged[-1] = ChatMessage(
-                role=row["role"], content=merged[-1].content + "\n\n" + row["text"]
+                role=row["role"], content=merged[-1].content + "\n\n" + text
             )
         else:
-            merged.append(ChatMessage(role=row["role"], content=row["text"]))
+            merged.append(ChatMessage(role=row["role"], content=text))
     while merged and merged[0].role == "assistant":
         merged.pop(0)
     return merged
@@ -179,6 +185,7 @@ def build_history(user_id: int, limit: int = HISTORY_LIMIT) -> list[ChatMessage]
 class ParsedResponse:
     reply: str
     actions: list[dict] = field(default_factory=list)
+    queries: list[dict] = field(default_factory=list)
 
 
 def assistant_turn_json(reply: str, actions: list[dict]) -> str:
@@ -222,11 +229,17 @@ def parse_ai_response(raw: str) -> ParsedResponse:
         if isinstance(actions_raw, list)
         else []
     )
+    queries_raw = data.get("queries")
+    queries = (
+        [q for q in queries_raw if isinstance(q, dict)]
+        if isinstance(queries_raw, list)
+        else []
+    )
     reply = data.get("reply")
     reply = reply.strip() if isinstance(reply, str) else ""
-    if not reply and not actions:
+    if not reply and not actions and not queries:
         return ParsedResponse(reply=raw.strip())
-    return ParsedResponse(reply=reply, actions=actions)
+    return ParsedResponse(reply=reply, actions=actions, queries=queries)
 
 
 def parse_morning_response(raw: str) -> list[dict]:

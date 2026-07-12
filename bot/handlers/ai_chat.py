@@ -31,6 +31,7 @@ from bot.config import Config
 from bot.keyboards import proposal_kb
 from bot.services import actions as actions_service
 from bot.services import ai_orchestrator as orchestrator
+from bot.services import queries as queries_service
 from bot.services import repository as repo
 from bot.utils import has_access, today_local, truncate
 
@@ -38,32 +39,64 @@ logger = logging.getLogger(__name__)
 router = Router(name="ai_chat")
 
 
+async def _run_query(message: Message, db_user: sqlite3.Row, query: dict) -> None:
+    """Выполнить read-запрос и показать список (диспатч по query['name'])."""
+    # deferred-импорт форматтеров — как в scheduler, чтобы не плодить циклы
+    from bot.handlers.commands import render_goal_list
+    from bot.handlers.tasks import render_task_list
+
+    name = query["name"]
+    if name == "list_tasks":
+        date = query["date"]
+        tasks = repo.list_tasks_for_date(db_user["id"], date)
+        if not tasks:
+            await message.answer(texts.TASKS_ON_DATE_EMPTY.format(date=html.escape(date)))
+            return
+        text, kb = render_task_list(
+            tasks, texts.TASKS_ON_DATE_HEADER.format(date=html.escape(date))
+        )
+        await message.answer(truncate(text), reply_markup=kb)
+    elif name == "list_goals":
+        goals = repo.list_active_goals(db_user["id"])
+        await message.answer(
+            texts.AIMS_EMPTY if not goals else truncate(render_goal_list(goals))
+        )
+
+
 async def deliver_ai_response(
     message: Message, db_user: sqlite3.Row, raw: str, source_text: str
 ) -> None:
-    """Общий хвост пайплайна: парсинг ответа модели → либо обычный ответ,
-    либо предложение действий с кнопками. Используется и чатом, и правкой."""
+    """Общий хвост пайплайна: парсинг ответа модели → read-запросы (сразу),
+    затем либо обычный ответ, либо предложение действий с кнопками.
+    Используется и чатом, и правкой."""
     parsed = orchestrator.parse_ai_response(raw)
+
+    # read-only запросы показываем сразу, без подтверждения
+    for query in queries_service.validate_queries(parsed.queries, db_user):
+        await _run_query(message, db_user, query)
+
     valid_actions = actions_service.validate_actions(parsed.actions, db_user["id"])
 
     if not valid_actions:
-        await message.answer(truncate(html.escape(parsed.reply)))
+        if parsed.reply:  # не слать пустое сообщение, если показали только список
+            await message.answer(truncate(html.escape(parsed.reply)))
         repo.log_message(
             db_user["id"], "assistant", orchestrator.assistant_turn_json(parsed.reply, [])
         )
         return
 
     type_ = valid_actions[0]["type"] if len(valid_actions) == 1 else "bulk_add"
-    payload = {"actions": valid_actions, "reply": parsed.reply, "source_text": source_text}
+    payload = {
+        "actions": valid_actions,
+        "reply": parsed.reply,
+        "source_text": source_text,
+        "done": [False] * len(valid_actions),
+    }
     pa_id = repo.create_pending_action(db_user["id"], type_, payload)
 
-    lines = []
-    if parsed.reply:
-        lines += [html.escape(parsed.reply), ""]
-    lines.append(texts.PROPOSAL_HEADER)
-    for i, action in enumerate(valid_actions, start=1):
-        lines.append(f"{i}. {actions_service.render_action_line(action)}")
-    sent = await message.answer(truncate("\n".join(lines)), reply_markup=proposal_kb(pa_id))
+    text = actions_service.render_proposal_text(payload)
+    kb = proposal_kb(pa_id, valid_actions, payload["done"])
+    sent = await message.answer(truncate(text), reply_markup=kb)
     repo.set_pending_message_id(pa_id, sent.message_id)
 
     repo.log_message(

@@ -284,6 +284,15 @@ def set_pending_message_id(pa_id: int, telegram_message_id: int) -> None:
         )
 
 
+def update_pending_payload(pa_id: int, payload: dict) -> None:
+    """Перезаписать JSON-payload (например, прогресс done[] при пер-экшн подтверждении)."""
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE pending_actions SET payload = ? WHERE id = ?",
+            (json.dumps(payload, ensure_ascii=False), pa_id),
+        )
+
+
 def get_pending_action(pa_id: int) -> sqlite3.Row | None:
     with _connect() as conn:
         return conn.execute(

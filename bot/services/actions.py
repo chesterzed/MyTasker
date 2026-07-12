@@ -213,6 +213,26 @@ def render_action_line(action: dict) -> str:
     return texts.ACTION_RESCHEDULE.format(title=title, date=action["new_date"])
 
 
+def render_proposal_text(payload: dict) -> str:
+    """Текст сообщения-предложения: reply + нумерованный список действий со статусом.
+
+    payload: {"reply", "actions": [...], "done": [bool, ...]}. Применённые действия
+    помечаются ✅. Имена типов (add_goal и т.п.) пользователю не показываются —
+    только человекочитаемые строки render_action_line."""
+    actions = payload.get("actions", [])
+    done = payload.get("done", [False] * len(actions))
+    reply = payload.get("reply") or ""
+
+    lines: list[str] = []
+    if reply:
+        lines += [html.escape(reply), ""]
+    lines.append(texts.PROPOSAL_HEADER)
+    for i, action in enumerate(actions, start=1):
+        mark = "✅ " if (i - 1 < len(done) and done[i - 1]) else ""
+        lines.append(f"{mark}{i}. {render_action_line(action)}")
+    return "\n".join(lines)
+
+
 def apply_all(user_id: int, actions: list[dict]) -> list[str]:
     """Применяет подтверждённые действия; возвращает строки результата (HTML)."""
     results = []
