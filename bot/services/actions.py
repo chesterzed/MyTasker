@@ -27,7 +27,12 @@ VALID_TYPES = {
     "delete_goal",
     "update_task",
     "delete_task",
+    "set_plan",
+    "update_step",
 }
+
+_PLAN_STEPS_MAX = 30
+_STEP_TOTAL_MAX = 1000
 
 
 def _clean_str(value, max_len: int = _TITLE_MAX) -> str | None:
@@ -82,6 +87,33 @@ def validate_action(action: dict, user_id: int) -> dict | None:
             "goal_id": goal_id,
         }
 
+    if type_ == "set_plan":
+        goal_id = action.get("goal_id")
+        if not isinstance(goal_id, int) or not repo.goal_exists(user_id, goal_id):
+            return None
+        steps = _clean_plan_steps(action.get("steps"))
+        if not steps:
+            return None
+        return {"type": "set_plan", "goal_id": goal_id, "steps": steps}
+
+    if type_ == "update_step":
+        step_id = action.get("step_id")
+        if not isinstance(step_id, int):
+            return None
+        step = repo.get_step(step_id)
+        if step is None or step["user_id"] != user_id:
+            return None
+        normalized: dict = {"type": "update_step", "step_id": step_id}
+        done = action.get("done")
+        if isinstance(done, bool):
+            normalized["done"] = done
+        progress = action.get("progress")
+        if isinstance(progress, int) and not isinstance(progress, bool) and progress >= 0:
+            normalized["progress"] = progress
+        if "done" not in normalized and "progress" not in normalized:
+            return None
+        return normalized
+
     if type_ in ("update_goal", "delete_goal"):
         goal_id = action.get("goal_id")
         if not isinstance(goal_id, int) or not repo.goal_exists(user_id, goal_id):
@@ -117,6 +149,26 @@ def validate_action(action: dict, user_id: int) -> dict | None:
     if not _valid_date(action.get("new_date")):
         return None
     return {"type": "reschedule", "task_id": task_id, "new_date": action["new_date"]}
+
+
+def _clean_plan_steps(raw) -> list[dict]:
+    """Нормализованные шаги плана для set_plan: [{"title", "progress_total"}]."""
+    if not isinstance(raw, list):
+        return []
+    steps: list[dict] = []
+    for item in raw[:_PLAN_STEPS_MAX]:
+        if not isinstance(item, dict):
+            continue
+        title = _clean_str(item.get("title"))
+        if not title:
+            continue
+        total = item.get("progress_total")
+        if not isinstance(total, int) or isinstance(total, bool) or not (
+            1 <= total <= _STEP_TOTAL_MAX
+        ):
+            total = None
+        steps.append({"title": title, "progress_total": total})
+    return steps
 
 
 def _collect_goal_fields(action: dict) -> dict:
@@ -197,14 +249,26 @@ def render_action_line(action: dict) -> str:
         return texts.ACTION_ADD_TASK.format(
             title=html.escape(action["title"]), date=action["date"]
         )
-    if type_ in ("update_goal", "delete_goal"):
+    if type_ in ("update_goal", "delete_goal", "set_plan"):
         goal = repo.get_goal_by_id(action["goal_id"])
         title = html.escape(goal["title"]) if goal else f"цель #{action['goal_id']}"
         if type_ == "delete_goal":
             return texts.ACTION_DELETE_GOAL.format(title=title)
+        if type_ == "set_plan":
+            return texts.ACTION_SET_PLAN.format(title=title, count=len(action["steps"]))
         return texts.ACTION_UPDATE_GOAL.format(
             title=title, fields=_fields_summary(action["fields"], _GOAL_FIELD_RU)
         )
+    if type_ == "update_step":
+        step = repo.get_step(action["step_id"])
+        title = html.escape(step["title"]) if step else f"шаг #{action['step_id']}"
+        if action.get("done") is False:
+            return texts.ACTION_STEP_UNDONE.format(title=title)
+        if "progress" in action:
+            total = step["progress_total"] if step else None
+            progress = f"{action['progress']}/{total}" if total else str(action["progress"])
+            return texts.ACTION_STEP_PROGRESS.format(title=title, progress=progress)
+        return texts.ACTION_STEP_DONE.format(title=title)
     task = repo.get_task(action["task_id"])
     title = html.escape(task["title"]) if task else f"задача #{action['task_id']}"
     if type_ == "complete_task":
@@ -266,6 +330,21 @@ def apply_all(user_id: int, actions: list[dict]) -> list[str]:
                     title=html.escape(action["title"]), date=action["date"]
                 )
             )
+        elif type_ == "set_plan":
+            goal = repo.get_goal_by_id(action["goal_id"])
+            count = repo.replace_goal_steps(user_id, action["goal_id"], action["steps"])
+            title = html.escape(goal["title"]) if goal else f"#{action['goal_id']}"
+            results.append(texts.RESULT_PLAN_SET.format(title=title, count=count))
+        elif type_ == "update_step":
+            step = repo.get_step(action["step_id"])
+            title = html.escape(step["title"]) if step else f"#{action['step_id']}"
+            if "progress" in action:
+                repo.set_step_progress(action["step_id"], action["progress"])
+            if "done" in action:
+                repo.set_step_status(
+                    action["step_id"], "done" if action["done"] else "pending"
+                )
+            results.append(texts.RESULT_STEP_UPDATED.format(title=title))
         elif type_ == "update_goal":
             goal = repo.get_goal_by_id(action["goal_id"])
             repo.update_goal(user_id, action["goal_id"], action["fields"])

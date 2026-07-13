@@ -17,6 +17,7 @@ from datetime import datetime
 from ai.base import AIClientError, ChatMessage
 from ai.key_manager import KeyManager
 from bot.config import DAILY_CAPACITY_MINUTES, Config
+from bot.services import actions as actions_service
 from bot.services import ai_orchestrator as orchestrator
 from bot.services import prompts
 from bot.services import repository as repo
@@ -39,6 +40,51 @@ def remaining_budget_minutes(user_id: int, date: str) -> int:
         if t["status"] in _ACTIVE_STATUSES and t["estimate_minutes"]:
             booked += t["estimate_minutes"]
     return DAILY_CAPACITY_MINUTES - booked
+
+
+async def generate_plan_for_goal(
+    db_user: sqlite3.Row, goal_id: int, config: Config, key_manager: KeyManager
+) -> int:
+    """Составить нейросетью подробный план цели (goal_steps, полная замена).
+    Возвращает число созданных шагов; 0 = не вышло. Исключений наружу не бросает."""
+    try:
+        return await _generate_plan(db_user, goal_id, config, key_manager)
+    except Exception:
+        logger.exception("generate_plan_for_goal failed for user %s", db_user["id"])
+        return 0
+
+
+async def _generate_plan(
+    db_user: sqlite3.Row, goal_id: int, config: Config, key_manager: KeyManager
+) -> int:
+    user_id = db_user["id"]
+    goal = repo.get_goal(user_id, goal_id)
+    if goal is None:
+        return 0
+
+    try:
+        client = orchestrator.build_client(db_user, config, key_manager)
+    except orchestrator.ClientConfigError:
+        logger.info("planning: user %s has no AI configured, skipping plan", user_id)
+        return 0
+
+    system_prompt = orchestrator.build_plan_system_prompt(db_user, goal)
+    try:
+        raw = await client.send_message(
+            [ChatMessage(role="user", content=prompts.PLAN_TRIGGER)],
+            system_prompt=system_prompt,
+            max_tokens=2048,  # подробный план из 20 шагов не влезает в дефолтные 1024
+        )
+    except AIClientError:
+        logger.exception("planning: AI plan call failed for user %s", user_id)
+        return 0
+
+    proposed = orchestrator.parse_plan_response(raw)
+    steps = actions_service._clean_plan_steps(proposed)
+    if not steps:
+        logger.warning("planning: unparseable plan response for user %s", user_id)
+        return 0
+    return repo.replace_goal_steps(user_id, goal_id, steps)
 
 
 async def generate_today_task_for_goal(

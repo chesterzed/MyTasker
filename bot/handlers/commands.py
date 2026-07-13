@@ -18,11 +18,11 @@ from ai.key_manager import KeyManager, KeyManagerError
 from bot import texts
 from bot.config import Config
 from bot.handlers.tasks import render_task_list
-from bot.keyboards import ProviderCb, provider_kb
+from bot.keyboards import ProviderCb, aims_kb, provider_kb
 from bot.services import repository as repo
 from bot.services import scheduler as scheduler_service
 from bot.states import SetCutoff, SetTimezone
-from bot.utils import today_local, truncate
+from bot.utils import step_progress_suffix, today_local, truncate
 
 router = Router(name="commands")
 
@@ -39,6 +39,12 @@ def render_goal_list(goals: list[sqlite3.Row]) -> str:
         lines.append(f"{i}. <b>{html.escape(g['title'])}</b>{suffix}")
         if g["description"]:
             lines.append(f"   <i>{html.escape(g['description'])}</i>")
+        # текущий (первый невыполненный) шаг плана — «выучить японский → уроки (2/3)»
+        step = repo.current_goal_step(g["id"])
+        if step is not None:
+            lines.append(
+                f"   ▸ {html.escape(step['title'])}{step_progress_suffix(step)}"
+            )
     return "\n".join(lines)
 
 
@@ -88,7 +94,7 @@ async def cmd_aims(message: Message, db_user: sqlite3.Row) -> None:
     if not goals:
         await message.answer(texts.AIMS_EMPTY)
         return
-    await message.answer(truncate(render_goal_list(goals)))
+    await message.answer(truncate(render_goal_list(goals)), reply_markup=aims_kb(goals))
 
 
 @router.message(Command("timezone"))

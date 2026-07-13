@@ -34,6 +34,13 @@ def has_access(db_user: sqlite3.Row) -> bool:
     return until >= datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
 
 
+def step_progress_suffix(step: sqlite3.Row) -> str:
+    """« (2/3)» для счётного шага плана, иначе пустая строка."""
+    if step["progress_total"]:
+        return f" ({step['progress_current']}/{step['progress_total']})"
+    return ""
+
+
 def truncate(text: str, limit: int = TELEGRAM_MESSAGE_LIMIT) -> str:
     if len(text) <= limit:
         return text

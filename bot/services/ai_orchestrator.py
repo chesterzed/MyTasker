@@ -51,6 +51,14 @@ def build_client(db_user: sqlite3.Row, config: Config, key_manager: KeyManager) 
 
 # ── сборка контекста ─────────────────────────────────────────────
 
+def _step_line(step: sqlite3.Row) -> str:
+    mark = "✅" if step["status"] == "done" else "⬜"
+    progress = ""
+    if step["progress_total"]:
+        progress = f" ({step['progress_current']}/{step['progress_total']})"
+    return f"[step_id={step['id']}] {mark} {step['title']}{progress}"
+
+
 def _goals_block(user_id: int) -> str:
     goals = repo.list_active_goals(user_id)
     if not goals:
@@ -68,6 +76,13 @@ def _goals_block(user_id: int) -> str:
         if extras:
             line += " — " + ", ".join(extras)
         lines.append(line)
+        # план цели — модель и отмечает шаги (update_step), и опирается на них утром
+        steps = repo.list_goal_steps(g["id"])
+        if steps:
+            lines.append("  план:")
+            lines.extend(f"  {_step_line(s)}" for s in steps)
+        else:
+            lines.append("  (плана пока нет)")
     return "\n".join(lines)
 
 
@@ -157,6 +172,15 @@ def build_goal_task_system_prompt(
         remaining_minutes=remaining_minutes,
         capacity_minutes=DAILY_CAPACITY_MINUTES,
         goal_id=goal["id"],
+    )
+
+
+def build_plan_system_prompt(db_user: sqlite3.Row, goal: sqlite3.Row) -> str:
+    today, weekday = _today_weekday(db_user)
+    return prompts.SYSTEM_PLAN.format(
+        today=today,
+        weekday=weekday,
+        goal_block=_single_goal_block(goal),
     )
 
 
@@ -250,3 +274,13 @@ def parse_morning_response(raw: str) -> list[dict]:
     if not isinstance(tasks, list):
         return []
     return [t for t in tasks if isinstance(t, dict)]
+
+
+def parse_plan_response(raw: str) -> list[dict]:
+    data = _extract_json(raw)
+    if data is None:
+        return []
+    steps = data.get("steps")
+    if not isinstance(steps, list):
+        return []
+    return [s for s in steps if isinstance(s, dict)]
