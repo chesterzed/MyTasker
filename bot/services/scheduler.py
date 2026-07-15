@@ -1,12 +1,14 @@
 """
 bot/services/scheduler.py
 
-APScheduler: per-user cron-джобы «утро» (генерация плана) и «день» (чек-ин)
-в часовом поясе пользователя. Ссылки на bot/config/key_manager задаются
-из main.py через setup().
+APScheduler: на каждого пользователя — по одному cron-джобу на каждое его время
+напоминания (таблица reminders) в его часовом поясе. Тон сообщения зависит от
+позиции времени в списке и времени суток (см. _reminder_role). Ссылки на
+bot/config/key_manager задаются из main.py через setup().
 """
 from __future__ import annotations
 
+import html
 import logging
 import sqlite3
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -18,7 +20,7 @@ from apscheduler.triggers.cron import CronTrigger
 from ai.base import AIClientError, ChatMessage
 from ai.key_manager import KeyManager
 from bot import texts
-from bot.config import MIDDAY_HOUR, MIDDAY_MINUTE, MORNING_HOUR, MORNING_MINUTE, Config
+from bot.config import EVENING_HOUR, Config
 from bot.services import ai_orchestrator as orchestrator
 from bot.services import prompts
 from bot.services import repository as repo
@@ -47,7 +49,11 @@ def build_scheduler() -> AsyncIOScheduler:
 
 
 def register_user_jobs(db_user: sqlite3.Row) -> None:
-    """Идемпотентно (replace_existing) регистрирует утро/день для пользователя."""
+    """Полностью пересобирает cron-джобы напоминаний пользователя из таблицы reminders.
+
+    Идемпотентно: снимает все прежние джобы пользователя и заводит по одному на
+    каждое актуальное время. Вызывается на старте, при смене таймзоны и после
+    любой правки списка напоминаний."""
     if _scheduler is None:
         return  # планировщик ещё не инициализирован (например, в тестах)
     try:
@@ -55,20 +61,21 @@ def register_user_jobs(db_user: sqlite3.Row) -> None:
     except ZoneInfoNotFoundError:
         tz = ZoneInfo("UTC")
 
-    _scheduler.add_job(
-        morning_job,
-        CronTrigger(hour=MORNING_HOUR, minute=MORNING_MINUTE, timezone=tz),
-        id=f"morning_{db_user['id']}",
-        args=(db_user["id"],),
-        replace_existing=True,
-    )
-    _scheduler.add_job(
-        midday_job,
-        CronTrigger(hour=MIDDAY_HOUR, minute=MIDDAY_MINUTE, timezone=tz),
-        id=f"midday_{db_user['id']}",
-        args=(db_user["id"],),
-        replace_existing=True,
-    )
+    uid = db_user["id"]
+    prefix = f"reminder_{uid}_"
+    for job in _scheduler.get_jobs():
+        if job.id.startswith(prefix):
+            _scheduler.remove_job(job.id)
+
+    for reminder in repo.list_reminders(uid):
+        hour, minute = (int(part) for part in reminder["time"].split(":"))
+        _scheduler.add_job(
+            reminder_job,
+            CronTrigger(hour=hour, minute=minute, timezone=tz),
+            id=f"{prefix}{reminder['id']}",
+            args=(reminder["id"],),
+            replace_existing=True,
+        )
 
 
 def register_all_users() -> None:
@@ -76,31 +83,76 @@ def register_all_users() -> None:
         register_user_jobs(user)
 
 
-async def morning_job(user_id: int) -> None:
+def _reminder_role(times: list[str], index: int, evening_hour: int = EVENING_HOUR) -> str:
+    """Роль напоминания по позиции в отсортированном списке времён и времени суток:
+    'first' — первое за день (доброе утро + план);
+    'progress' — не первое, дневное (< evening_hour);
+    'deadline' — вечернее (>= evening_hour), но не последнее;
+    'summary' — вечернее и последнее."""
+    if index == 0:
+        return "first"
+    hour = int(times[index].split(":")[0])
+    is_evening = hour >= evening_hour
+    is_last = index == len(times) - 1
+    if is_evening and is_last:
+        return "summary"
+    if is_evening:
+        return "deadline"
+    return "progress"
+
+
+_CHECKIN_HEADERS = {
+    "progress": texts.REMINDER_PROGRESS,
+    "deadline": texts.REMINDER_DEADLINE,
+    "summary": texts.REMINDER_SUMMARY,
+}
+
+
+async def reminder_job(reminder_id: int) -> None:
     try:
-        await _morning_job(user_id)
+        await _reminder_job(reminder_id)
     except Exception:
-        logger.exception("morning_job failed for user %s", user_id)
+        logger.exception("reminder_job failed for reminder %s", reminder_id)
 
 
-async def _morning_job(user_id: int) -> None:
-    from bot.handlers.tasks import render_task_list
-
+async def _reminder_job(reminder_id: int) -> None:
+    reminder = repo.get_reminder(reminder_id)
+    if reminder is None:  # напоминание удалили — джоб мог остаться на лету
+        return
+    user_id = reminder["user_id"]
     db_user = repo.get_user(user_id)
     if db_user is None or not has_access(db_user):
         return
+
+    reminders = repo.list_reminders(user_id)
+    times = [r["time"] for r in reminders]
+    try:
+        index = next(i for i, r in enumerate(reminders) if r["id"] == reminder_id)
+    except StopIteration:
+        return
+
+    role = _reminder_role(times, index)
+    if role == "first":
+        await _send_plan(db_user)
+    else:
+        await _send_checkin(db_user, _CHECKIN_HEADERS[role])
+
+
+async def _send_plan(db_user: sqlite3.Row) -> None:
+    """Первое напоминание за день: сгенерировать задачи (если ещё нет) и прислать план."""
+    from bot.handlers.tasks import render_task_list
+
+    user_id = db_user["id"]
     if not repo.list_active_goals(user_id):
         return
 
     today = today_local(db_user)
-
-    # Идемпотентность: если задачи на сегодня уже есть — только показать их
     existing = repo.list_tasks_for_date(user_id, today)
     if not existing:
         try:
             client = orchestrator.build_client(db_user, _config, _key_manager)
         except orchestrator.ClientConfigError:
-            logger.info("morning_job: user %s has no AI configured, skipping", user_id)
+            logger.info("reminder plan: user %s has no AI configured, skipping", user_id)
             return
 
         system_prompt = orchestrator.build_morning_system_prompt(db_user)
@@ -110,12 +162,12 @@ async def _morning_job(user_id: int) -> None:
                 system_prompt=system_prompt,
             )
         except AIClientError:
-            logger.exception("morning_job: AI call failed for user %s", user_id)
+            logger.exception("reminder plan: AI call failed for user %s", user_id)
             return
 
         proposed = orchestrator.parse_morning_response(raw)
         if not proposed:
-            logger.warning("morning_job: unparseable AI response for user %s", user_id)
+            logger.warning("reminder plan: unparseable AI response for user %s", user_id)
             return
 
         for i, t in enumerate(proposed[:5]):
@@ -147,24 +199,13 @@ async def _morning_job(user_id: int) -> None:
     await _bot.send_message(db_user["telegram_id"], truncate(text), reply_markup=kb)
 
 
-async def midday_job(user_id: int) -> None:
-    try:
-        await _midday_job(user_id)
-    except Exception:
-        logger.exception("midday_job failed for user %s", user_id)
-
-
-async def _midday_job(user_id: int) -> None:
-    import html
-
-    db_user = repo.get_user(user_id)
-    if db_user is None or not has_access(db_user):
-        return
-
+async def _send_checkin(db_user: sqlite3.Row, header: str) -> None:
+    """Не первое напоминание: чек-ин выбранным тоном + список ещё не сделанных задач."""
+    user_id = db_user["id"]
     today = today_local(db_user)
     repo.upsert_checkin_sent(user_id, today)
 
-    text = texts.CHECKIN_QUESTION
+    text = header
     pending = [t for t in repo.list_tasks_for_date(user_id, today) if t["status"] == "pending"]
     if pending:
         task_lines = "\n".join(f"⬜ {html.escape(t['title'])}" for t in pending)

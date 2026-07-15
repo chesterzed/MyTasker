@@ -457,6 +457,36 @@ def test_apply_delete_goal_removes_it(temp_db):
     assert repo.get_goal_by_id(1) is None
 
 
+# ── delete_all_tasks ─────────────────────────────────────────────
+
+def test_delete_all_tasks_validate_carries_count(temp_db):
+    repo.add_task(1, title="Ещё", date="2026-07-12")
+    result = actions_service.validate_action({"type": "delete_all_tasks"}, 1)
+    assert result["type"] == "delete_all_tasks"
+    assert result["count"] == len(repo.list_all_tasks(1))
+
+
+def test_apply_delete_all_tasks_only_own(temp_db):
+    repo.add_task(1, title="A", date="2026-07-12")
+    repo.add_task(1, title="B", date="2026-07-13")
+    actions_service.apply_all(1, [{"type": "delete_all_tasks"}])
+    assert repo.list_all_tasks(1) == []
+    # задача пользователя 2 (id=2 в фикстуре) не тронута
+    assert repo.get_task(2) is not None
+
+
+# ── utils.is_iso_date ────────────────────────────────────────────
+
+def test_is_iso_date():
+    from bot.utils import is_iso_date
+
+    assert is_iso_date("2026-07-13")
+    assert not is_iso_date("завтра")
+    assert not is_iso_date("2026-7-13")
+    assert not is_iso_date(None)
+    assert not is_iso_date(20260713)
+
+
 def test_delete_goal_orphans_linked_task_not_removes(temp_db):
     # задача, привязанная к цели, переживает удаление цели (goal_id → NULL)
     task_id = repo.add_task(1, title="Связанная", date="2026-07-12", goal_id=1)

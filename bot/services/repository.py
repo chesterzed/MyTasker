@@ -40,13 +40,6 @@ def upsert_user(telegram_id: int, username: str | None, first_name: str | None) 
         ).fetchone()
 
 
-def get_user_by_telegram_id(telegram_id: int) -> sqlite3.Row | None:
-    with _connect() as conn:
-        return conn.execute(
-            "SELECT * FROM users WHERE telegram_id = ?", (telegram_id,)
-        ).fetchone()
-
-
 def get_user(user_id: int) -> sqlite3.Row | None:
     with _connect() as conn:
         return conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
@@ -242,6 +235,13 @@ def delete_task(user_id: int, task_id: int) -> None:
         )
 
 
+def delete_all_tasks(user_id: int) -> int:
+    """Удаляет все задачи пользователя; возвращает число удалённых."""
+    with _connect() as conn:
+        cur = conn.execute("DELETE FROM tasks WHERE user_id = ?", (user_id,))
+        return cur.rowcount
+
+
 def recent_task_history(user_id: int, days: int = 7) -> list[sqlite3.Row]:
     with _connect() as conn:
         return conn.execute(
@@ -250,6 +250,62 @@ def recent_task_history(user_id: int, days: int = 7) -> list[sqlite3.Row]:
             "ORDER BY date, order_index",
             (user_id, f"-{days} days"),
         ).fetchall()
+
+
+# ── reminders ────────────────────────────────────────────────────
+
+def list_reminders(user_id: int) -> list[sqlite3.Row]:
+    with _connect() as conn:
+        return conn.execute(
+            "SELECT * FROM reminders WHERE user_id = ? ORDER BY time, id",
+            (user_id,),
+        ).fetchall()
+
+
+def get_reminder(reminder_id: int) -> sqlite3.Row | None:
+    with _connect() as conn:
+        return conn.execute(
+            "SELECT * FROM reminders WHERE id = ?", (reminder_id,)
+        ).fetchone()
+
+
+def add_reminder(user_id: int, time: str) -> int:
+    with _connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO reminders (user_id, time) VALUES (?, ?)", (user_id, time)
+        )
+        return cur.lastrowid
+
+
+def update_reminder(user_id: int, reminder_id: int, time: str) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE reminders SET time = ? WHERE id = ? AND user_id = ?",
+            (time, reminder_id, user_id),
+        )
+
+
+def delete_reminder(user_id: int, reminder_id: int) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "DELETE FROM reminders WHERE id = ? AND user_id = ?", (reminder_id, user_id)
+        )
+
+
+def ensure_default_reminders(user_id: int) -> None:
+    """Если у пользователя нет напоминаний — посеять дефолтные времена."""
+    from bot.config import DEFAULT_REMINDER_TIMES
+
+    with _connect() as conn:
+        has = conn.execute(
+            "SELECT 1 FROM reminders WHERE user_id = ? LIMIT 1", (user_id,)
+        ).fetchone()
+        if has is not None:
+            return
+        conn.executemany(
+            "INSERT INTO reminders (user_id, time) VALUES (?, ?)",
+            [(user_id, t) for t in DEFAULT_REMINDER_TIMES],
+        )
 
 
 # ── checkins ─────────────────────────────────────────────────────

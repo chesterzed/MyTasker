@@ -7,13 +7,12 @@ bot/services/actions.py
 from __future__ import annotations
 
 import html
-import re
 
 from bot import texts
 from bot.config import MAX_ACTIONS
 from bot.services import repository as repo
+from bot.utils import is_iso_date
 
-_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _TITLE_MAX = 200
 _GOAL_STATUSES = {"active", "paused", "completed", "archived"}
 _ESTIMATE_MAX = 24 * 60  # верхняя граница оценки задачи в минутах
@@ -27,6 +26,7 @@ VALID_TYPES = {
     "delete_goal",
     "update_task",
     "delete_task",
+    "delete_all_tasks",
 }
 
 
@@ -38,7 +38,7 @@ def _clean_str(value, max_len: int = _TITLE_MAX) -> str | None:
 
 
 def _valid_date(value) -> bool:
-    return isinstance(value, str) and bool(_DATE_RE.match(value))
+    return is_iso_date(value)
 
 
 def validate_action(action: dict, user_id: int) -> dict | None:
@@ -46,6 +46,10 @@ def validate_action(action: dict, user_id: int) -> dict | None:
     type_ = action.get("type")
     if type_ not in VALID_TYPES:
         return None
+
+    if type_ == "delete_all_tasks":
+        # id не нужен; count — для подписи кнопки (здесь есть user_id)
+        return {"type": "delete_all_tasks", "count": len(repo.list_all_tasks(user_id))}
 
     if type_ == "add_goal":
         title = _clean_str(action.get("title"))
@@ -191,6 +195,8 @@ def _fields_summary(fields: dict, names: dict) -> str:
 def render_action_line(action: dict) -> str:
     """Человекочитаемая строка действия для сообщения-предложения (HTML)."""
     type_ = action["type"]
+    if type_ == "delete_all_tasks":
+        return texts.ACTION_DELETE_ALL_TASKS.format(count=action["count"])
     if type_ == "add_goal":
         return texts.ACTION_ADD_GOAL.format(title=html.escape(action["title"]))
     if type_ == "add_task":
@@ -243,7 +249,10 @@ def apply_all(user_id: int, actions: list[dict]) -> list[str]:
     results = []
     for action in actions:
         type_ = action["type"]
-        if type_ == "add_goal":
+        if type_ == "delete_all_tasks":
+            n = repo.delete_all_tasks(user_id)
+            results.append(texts.RESULT_ALL_TASKS_DELETED.format(count=n))
+        elif type_ == "add_goal":
             repo.add_goal(
                 user_id,
                 title=action["title"],

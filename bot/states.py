@@ -26,3 +26,8 @@ class SetCutoff(StatesGroup):
 
 class EditProposal(StatesGroup):
     waiting_for_correction = State()     # нажата «Изменить»; в data: {"pa_id": int}
+
+
+class Notifications(StatesGroup):
+    waiting_for_new_time = State()       # ➕ → ждём HH:MM для нового напоминания
+    waiting_for_edit_time = State()      # ✏️ → ждём HH:MM; в data: {"reminder_id": int}

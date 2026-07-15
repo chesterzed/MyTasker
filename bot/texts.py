@@ -23,6 +23,7 @@ HELP = (
     "/provider — переключить нейросеть (Claude / Ollama)\n"
     "/timezone — установить часовой пояс\n"
     "/cutoff — до какого часа планировать день\n"
+    "/notifications — времена напоминаний\n"
     "/cancel — отменить текущий диалог\n"
     "/help — это сообщение\n\n"
     "А любое обычное сообщение — это разговор с нейросетью: она ответит "
@@ -58,6 +59,8 @@ TODAY_EMPTY = (
     "Задач на сегодня нет.\n"
     "Утром я пришлю план — или просто напиши мне, что хочешь сделать."
 )
+# показывается под пустым /today: видно, по какой дате/поясу считалось «сегодня»
+TODAY_EMPTY_TZ_NOTE = "🕓 Сегодня по твоему поясу <b>{tz}</b>: {date}. Сменить пояс: /timezone"
 
 # /timezone
 TIMEZONE_ASK = (
@@ -66,6 +69,12 @@ TIMEZONE_ASK = (
 )
 TIMEZONE_SAVED = "Часовой пояс установлен: {tz} ✅"
 TIMEZONE_INVALID = "Не похоже на часовой пояс. Пример: <code>Europe/Moscow</code>. Попробуй ещё раз или /cancel."
+# нудж при онбординге, если пояс всё ещё дефолтный UTC
+TIMEZONE_HINT = (
+    "🕓 Твой часовой пояс сейчас — <b>UTC</b>. Если ты не в UTC, задай свой командой "
+    "/timezone, иначе «сегодня» (и задачи на день) будут считаться по UTC и могут "
+    "не совпадать с твоим днём."
+)
 
 # /cutoff
 CUTOFF_ASK = (
@@ -110,7 +119,6 @@ AI_TIMEOUT = "Нейросеть не отвечает. Попробуй ещё 
 AI_GENERIC_ERROR = "Не получилось обратиться к нейросети. Попробуй ещё раз."
 
 PROPOSAL_HEADER = "<b>Предлагаемые действия:</b>"
-PROPOSAL_APPLIED = "✅ Применено"
 PROPOSAL_REJECTED = "❌ Отклонено"
 PROPOSAL_EDIT_ASK = "✏️ Напиши, что изменить в этом плане:"
 STALE_PROPOSAL = "Это предложение уже неактуально."
@@ -131,6 +139,7 @@ ACTION_UPDATE_GOAL = "✏️ Изменить цель «{title}» ({fields})"
 ACTION_DELETE_GOAL = "🗑 Удалить цель «{title}»"
 ACTION_UPDATE_TASK = "✏️ Изменить задачу «{title}» ({fields})"
 ACTION_DELETE_TASK = "🗑 Удалить задачу «{title}»"
+ACTION_DELETE_ALL_TASKS = "🗑 Удалить все задачи ({count})"
 
 RESULT_GOAL_ADDED = "➕ Цель «{title}» добавлена"
 RESULT_TASK_ADDED = "📌 Задача «{title}» добавлена на {date}"
@@ -140,6 +149,7 @@ RESULT_GOAL_UPDATED = "✏️ Цель «{title}» обновлена"
 RESULT_GOAL_DELETED = "🗑 Цель «{title}» удалена"
 RESULT_TASK_UPDATED = "✏️ Задача «{title}» обновлена"
 RESULT_TASK_DELETED = "🗑 Задача «{title}» удалена"
+RESULT_ALL_TASKS_DELETED = "🗑 Удалено задач: {count}"
 
 TASK_DONE_ANSWER = "Отмечено ✅"
 TASK_ALREADY_DONE = "Эта задача уже отмечена."
@@ -151,10 +161,18 @@ VOICE_EMPTY = "Не расслышал — в голосовом не нашло
 VOICE_ERROR = "Не получилось распознать голосовое. Попробуй ещё раз или напиши текстом."
 VOICE_IN_DIALOG = "Сейчас я жду текстовый ответ. Напиши текстом — или /cancel, чтобы выйти из диалога."
 
-# Scheduler
-MORNING_HEADER = "☀️ <b>Доброе утро! План на сегодня:</b>"
-CHECKIN_QUESTION = (
-    "👋 Как успехи с сегодняшними задачами?\n"
-    "Напиши пару слов — я отмечу выполненное и помогу с остальным."
-)
+# Scheduler / напоминания
+MORNING_HEADER = "☀️ <b>Доброе утро! План на сегодня:</b>"       # первое за день
+REMINDER_PROGRESS = "👋 Как успехи? Уже начал?"                    # не первое, дневное
+REMINDER_DEADLINE = "⏰ Скоро дедлайн — как продвигаешься?"        # вечернее, не последнее
+REMINDER_SUMMARY = "🌙 Подведём итог дня?"                         # вечернее и последнее
 CHECKIN_PENDING_TASKS = "\n<b>Ещё в работе:</b>\n{tasks}"
+
+# /notifications
+NOTIF_HEADER = "<b>Твои напоминания:</b>"
+NOTIF_EMPTY = "Напоминаний пока нет. Добавь первое кнопкой ➕ ниже."
+NOTIF_ASK_TIME = "Во сколько напоминать? Пришли время в формате <code>ЧЧ:ММ</code>, например <code>09:30</code>."
+NOTIF_INVALID_TIME = "Не похоже на время. Пример: <code>09:30</code>. Попробуй ещё раз или /cancel."
+NOTIF_DUPLICATE = "Такое время уже есть в списке."
+NOTIF_DELETED = "Напоминание удалено"
+BTN_NOTIF_ADD = "➕ Добавить"

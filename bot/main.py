@@ -36,6 +36,7 @@ BOT_COMMANDS = [
     BotCommand(command="provider", description="Переключить нейросеть"),
     BotCommand(command="timezone", description="Часовой пояс"),
     BotCommand(command="cutoff", description="До какого часа планировать день"),
+    BotCommand(command="notifications", description="Времена напоминаний"),
     BotCommand(command="cancel", description="Отменить текущий диалог"),
     BotCommand(command="help", description="Справка"),
 ]

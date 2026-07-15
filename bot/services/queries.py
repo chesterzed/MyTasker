@@ -7,12 +7,10 @@ bot/services/queries.py
 """
 from __future__ import annotations
 
-import re
 import sqlite3
 
-from bot.utils import today_local
+from bot.utils import is_iso_date, today_local
 
-_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 MAX_QUERIES = 5
 
 VALID_QUERIES = {"list_tasks", "list_all_tasks", "list_goals"}
@@ -27,7 +25,7 @@ def validate_queries(queries: list[dict], db_user: sqlite3.Row) -> list[dict]:
             continue
         if name == "list_tasks":
             date = q.get("date")
-            if not (isinstance(date, str) and _DATE_RE.match(date)):
+            if not is_iso_date(date):
                 date = today_local(db_user)  # дефолт — сегодня
             out.append({"name": "list_tasks", "date": date})
         elif name == "list_all_tasks":

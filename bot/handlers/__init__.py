@@ -8,12 +8,22 @@ from aiogram import Router
 
 
 def build_root_router() -> Router:
-    from bot.handlers import addaim, ai_chat, commands, proposals, setkey, tasks, voice
+    from bot.handlers import (
+        addaim,
+        ai_chat,
+        commands,
+        notifications,
+        proposals,
+        setkey,
+        tasks,
+        voice,
+    )
 
     root = Router(name="root")
     root.include_router(commands.router)
     root.include_router(addaim.router)
     root.include_router(setkey.router)
+    root.include_router(notifications.router)
     root.include_router(proposals.router)
     root.include_router(tasks.router)
     root.include_router(voice.router)     # перед ai_chat: F.voice не пересекается с F.text

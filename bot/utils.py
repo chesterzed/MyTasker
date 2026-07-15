@@ -5,11 +5,33 @@ bot/utils.py
 """
 from __future__ import annotations
 
+import re
 import sqlite3
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from bot.config import TELEGRAM_MESSAGE_LIMIT
+
+ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_HHMM_RE = re.compile(r"^(\d{1,2}):(\d{2})$")
+
+
+def is_iso_date(value: object) -> bool:
+    """True, если value — строка вида YYYY-MM-DD."""
+    return isinstance(value, str) and bool(ISO_DATE_RE.match(value))
+
+
+def parse_hhmm(value: object) -> str | None:
+    """'9:30'/'09:30' → '09:30'; невалидное время → None."""
+    if not isinstance(value, str):
+        return None
+    m = _HHMM_RE.match(value.strip())
+    if not m:
+        return None
+    hour, minute = int(m.group(1)), int(m.group(2))
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return f"{hour:02d}:{minute:02d}"
 
 
 def user_tz(db_user: sqlite3.Row) -> ZoneInfo:

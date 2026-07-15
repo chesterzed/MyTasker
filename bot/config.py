@@ -13,11 +13,12 @@ from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# Константы (в будущем — персональные настройки пользователя)
-MORNING_HOUR = 8
-MORNING_MINUTE = 0
-MIDDAY_HOUR = 14
-MIDDAY_MINUTE = 0
+# Времена напоминаний по умолчанию (посев новым пользователям); дальше
+# редактируются персонально через /notifications (таблица reminders).
+DEFAULT_REMINDER_TIMES = ("08:00", "14:00")
+# С какого часа местного времени напоминание считается «вечерним»
+# (тон «скоро дедлайн» / «подведём итог»).
+EVENING_HOUR = 18
 HISTORY_LIMIT = 30
 MAX_ACTIONS = 5
 TELEGRAM_MESSAGE_LIMIT = 4096

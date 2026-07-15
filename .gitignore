@@ -8,3 +8,4 @@ logs/
 vcs.xml
 *.db-shm
 *.db-wal
+.DS_Store

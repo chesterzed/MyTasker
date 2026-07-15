@@ -53,9 +53,12 @@ async def cmd_start(
         and db_user["role"] != "admin"
     ):
         repo.set_role(db_user["id"], "admin")
+    repo.ensure_default_reminders(db_user["id"])  # новым — дефолтные времена
     scheduler_service.register_user_jobs(db_user)
     name = html.escape(db_user["first_name"] or "друг")
     await message.answer(texts.GREETING.format(name=name))
+    if (db_user["timezone"] or "UTC") == "UTC":
+        await message.answer(texts.TIMEZONE_HINT)
 
 
 @router.message(Command("help"))
@@ -74,9 +77,13 @@ async def cmd_cancel(message: Message, state: FSMContext) -> None:
 
 @router.message(Command("today"))
 async def cmd_today(message: Message, db_user: sqlite3.Row) -> None:
-    tasks = repo.list_tasks_for_date(db_user["id"], today_local(db_user))
+    today = today_local(db_user)
+    tasks = repo.list_tasks_for_date(db_user["id"], today)
     if not tasks:
-        await message.answer(texts.TODAY_EMPTY)
+        note = texts.TODAY_EMPTY_TZ_NOTE.format(
+            tz=html.escape(db_user["timezone"] or "UTC"), date=today
+        )
+        await message.answer(f"{texts.TODAY_EMPTY}\n\n{note}")
         return
     text, kb = render_task_list(tasks, texts.TODAY_HEADER)
     await message.answer(text, reply_markup=kb)

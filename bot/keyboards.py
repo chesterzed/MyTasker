@@ -35,6 +35,11 @@ class ProviderCb(CallbackData, prefix="prov"):
     provider: str
 
 
+class NotifCb(CallbackData, prefix="notif"):
+    action: str        # "add" | "edit" | "del"
+    reminder_id: int = 0   # для edit/del; 0 для add
+
+
 def proposal_kb(
     pa_id: int, actions: list[dict], done: list[bool]
 ) -> InlineKeyboardMarkup | None:
@@ -81,6 +86,17 @@ def tasks_kb(tasks: list[sqlite3.Row]) -> InlineKeyboardMarkup | None:
     if count == 0:
         return None
     b.adjust(8)
+    return b.as_markup()
+
+
+def notifications_kb(reminders: list[sqlite3.Row]) -> InlineKeyboardMarkup:
+    """На каждое напоминание ряд [❌ i][✏️ i]; внизу отдельный ряд [➕ Добавить]."""
+    b = InlineKeyboardBuilder()
+    for i, r in enumerate(reminders, start=1):
+        b.button(text=f"❌ {i}", callback_data=NotifCb(action="del", reminder_id=r["id"]))
+        b.button(text=f"✏️ {i}", callback_data=NotifCb(action="edit", reminder_id=r["id"]))
+    b.button(text=texts.BTN_NOTIF_ADD, callback_data=NotifCb(action="add"))
+    b.adjust(*([2] * len(reminders) + [1]))
     return b.as_markup()
 
 
