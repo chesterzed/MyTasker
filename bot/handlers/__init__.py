@@ -13,6 +13,7 @@ def build_root_router() -> Router:
         ai_chat,
         commands,
         notifications,
+        plans,
         proposals,
         setkey,
         tasks,
@@ -26,6 +27,7 @@ def build_root_router() -> Router:
     root.include_router(notifications.router)
     root.include_router(proposals.router)
     root.include_router(tasks.router)
+    root.include_router(plans.router)     # callbacks плана целей (plan:/step:)
     root.include_router(voice.router)     # перед ai_chat: F.voice не пересекается с F.text
     root.include_router(ai_chat.router)   # строго последним
     return root

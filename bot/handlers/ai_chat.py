@@ -28,7 +28,7 @@ from ai.base import (
 from ai.key_manager import KeyManager
 from bot import texts
 from bot.config import Config
-from bot.keyboards import proposal_kb
+from bot.keyboards import aims_kb, proposal_kb
 from bot.services import actions as actions_service
 from bot.services import ai_orchestrator as orchestrator
 from bot.services import queries as queries_service
@@ -65,9 +65,12 @@ async def _run_query(message: Message, db_user: sqlite3.Row, query: dict) -> Non
         )
     elif name == "list_goals":
         goals = repo.list_active_goals(db_user["id"])
-        await message.answer(
-            texts.AIMS_EMPTY if not goals else truncate(render_goal_list(goals))
-        )
+        if not goals:
+            await message.answer(texts.AIMS_EMPTY)
+        else:
+            await message.answer(
+                truncate(render_goal_list(goals)), reply_markup=aims_kb(goals)
+            )
 
 
 async def deliver_ai_response(

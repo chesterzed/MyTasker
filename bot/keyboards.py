@@ -40,6 +40,16 @@ class NotifCb(CallbackData, prefix="notif"):
     reminder_id: int = 0   # для edit/del; 0 для add
 
 
+class GoalPlanCb(CallbackData, prefix="plan"):
+    action: str        # "show" | "back" | "gen"
+    goal_id: int
+
+
+class StepCb(CallbackData, prefix="step"):
+    action: str        # "toggle"
+    step_id: int
+
+
 def proposal_kb(
     pa_id: int, actions: list[dict], done: list[bool]
 ) -> InlineKeyboardMarkup | None:
@@ -97,6 +107,46 @@ def notifications_kb(reminders: list[sqlite3.Row]) -> InlineKeyboardMarkup:
         b.button(text=f"✏️ {i}", callback_data=NotifCb(action="edit", reminder_id=r["id"]))
     b.button(text=texts.BTN_NOTIF_ADD, callback_data=NotifCb(action="add"))
     b.adjust(*([2] * len(reminders) + [1]))
+    return b.as_markup()
+
+
+def aims_kb(goals: list[sqlite3.Row]) -> InlineKeyboardMarkup | None:
+    """Кнопки «n 📄» под списком целей — открыть план цели.
+    Нумерация совпадает с нумерацией render_goal_list (тот же порядок списка)."""
+    if not goals:
+        return None
+    b = InlineKeyboardBuilder()
+    for i, goal in enumerate(goals, start=1):
+        b.button(
+            text=f"{i} 📄", callback_data=GoalPlanCb(action="show", goal_id=goal["id"])
+        )
+    b.adjust(8)
+    return b.as_markup()
+
+
+def plan_kb(goal_id: int, steps: list[sqlite3.Row]) -> InlineKeyboardMarkup:
+    """Клавиатура плана: тумблеры шагов + «Составить план» (если пусто) + «Назад».
+
+    Для невыполненного шага кнопка «✅ n» (отметить), для выполненного — «❌ n»
+    (снять отметку). Перерисовывается после каждого нажатия."""
+    b = InlineKeyboardBuilder()
+    for i, step in enumerate(steps, start=1):
+        mark = "❌" if step["status"] == "done" else "✅"
+        b.button(
+            text=f"{mark} {i}", callback_data=StepCb(action="toggle", step_id=step["id"])
+        )
+    b.adjust(8)
+
+    controls = InlineKeyboardBuilder()
+    if not steps:
+        controls.button(
+            text=texts.BTN_PLAN_GEN, callback_data=GoalPlanCb(action="gen", goal_id=goal_id)
+        )
+    controls.button(
+        text=texts.BTN_PLAN_BACK, callback_data=GoalPlanCb(action="back", goal_id=goal_id)
+    )
+    controls.adjust(2)
+    b.attach(controls)
     return b.as_markup()
 
 

@@ -277,6 +277,29 @@ def add_reminder(user_id: int, time: str) -> int:
         return cur.lastrowid
 
 
+# ── goal_steps (план цели) ───────────────────────────────────────
+
+def add_goal_step(
+    user_id: int,
+    goal_id: int,
+    title: str,
+    order_index: int | None = None,
+    progress_total: int | None = None,
+) -> int:
+    with _connect() as conn:
+        if order_index is None:
+            order_index = conn.execute(
+                "SELECT COALESCE(MAX(order_index), -1) + 1 FROM goal_steps WHERE goal_id = ?",
+                (goal_id,),
+            ).fetchone()[0]
+        cur = conn.execute(
+            "INSERT INTO goal_steps (user_id, goal_id, order_index, title, progress_total) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (user_id, goal_id, order_index, title, progress_total),
+        )
+        return cur.lastrowid
+
+
 def update_reminder(user_id: int, reminder_id: int, time: str) -> None:
     with _connect() as conn:
         conn.execute(
@@ -305,6 +328,80 @@ def ensure_default_reminders(user_id: int) -> None:
         conn.executemany(
             "INSERT INTO reminders (user_id, time) VALUES (?, ?)",
             [(user_id, t) for t in DEFAULT_REMINDER_TIMES],
+        )
+
+
+# ── goal_steps queries/mutations ─────────────────────────────────
+
+def list_goal_steps(goal_id: int) -> list[sqlite3.Row]:
+    with _connect() as conn:
+        return conn.execute(
+            "SELECT * FROM goal_steps WHERE goal_id = ? ORDER BY order_index, id",
+            (goal_id,),
+        ).fetchall()
+
+
+def get_step(step_id: int) -> sqlite3.Row | None:
+    with _connect() as conn:
+        return conn.execute(
+            "SELECT * FROM goal_steps WHERE id = ?", (step_id,)
+        ).fetchone()
+
+
+def current_goal_step(goal_id: int) -> sqlite3.Row | None:
+    """Первый невыполненный шаг плана (для строки «▸ …» в /aims)."""
+    with _connect() as conn:
+        return conn.execute(
+            "SELECT * FROM goal_steps WHERE goal_id = ? AND status = 'pending' "
+            "ORDER BY order_index, id LIMIT 1",
+            (goal_id,),
+        ).fetchone()
+
+
+def replace_goal_steps(user_id: int, goal_id: int, steps: list[dict]) -> int:
+    """Полная замена плана цели (для set_plan). steps: [{"title", "progress_total"}].
+    Возвращает количество созданных шагов."""
+    with _connect() as conn:
+        conn.execute(
+            "DELETE FROM goal_steps WHERE goal_id = ? AND user_id = ?",
+            (goal_id, user_id),
+        )
+        for i, step in enumerate(steps):
+            conn.execute(
+                "INSERT INTO goal_steps (user_id, goal_id, order_index, title, progress_total) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (user_id, goal_id, i, step["title"], step.get("progress_total")),
+            )
+    return len(steps)
+
+
+def set_step_status(step_id: int, status: str) -> None:
+    """'done' — у счётного шага прогресс добивается до total; 'pending' — снять отметку."""
+    with _connect() as conn:
+        if status == "done":
+            conn.execute(
+                "UPDATE goal_steps SET status = 'done', "
+                "progress_current = COALESCE(progress_total, progress_current) "
+                "WHERE id = ?",
+                (step_id,),
+            )
+        else:
+            conn.execute(
+                "UPDATE goal_steps SET status = 'pending' WHERE id = ?", (step_id,)
+            )
+
+
+def set_step_progress(step_id: int, current: int) -> None:
+    """Выставить счётчик шага; при достижении total шаг автоматически done
+    (и наоборот — откат ниже total снимает отметку)."""
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE goal_steps SET "
+            "progress_current = MIN(?, COALESCE(progress_total, ?)), "
+            "status = CASE WHEN progress_total IS NOT NULL AND ? >= progress_total "
+            "THEN 'done' ELSE 'pending' END "
+            "WHERE id = ?",
+            (current, current, current, step_id),
         )
 
 

@@ -84,26 +84,27 @@ def temp_db(tmp_path: Path, monkeypatch):
     yield db_path
 
 
-def test_migration_003_seeds_existing_users(tmp_path: Path):
-    # Проверяем реальный порядок: пользователи существуют ДО применения 003.
+def test_reminders_migration_seeds_existing_users(tmp_path: Path):
+    # Проверяем реальный порядок: пользователи существуют ДО применения
+    # миграции напоминаний (004_reminders — после 003_goal_steps).
     from db.migrate import _discover
 
     db_path = tmp_path / "mig.db"
     conn = sqlite3.connect(db_path)
     for version, path in _discover():
-        if version >= 3:
+        if version >= 4:
             break
         conn.executescript(path.read_text(encoding="utf-8"))
         conn.execute(f"PRAGMA user_version = {version}")
     conn.execute("INSERT INTO users (telegram_id) VALUES (111)")
     conn.commit()
 
-    # теперь накатываем недостающие (003) — оно засеет существующего пользователя
+    # теперь накатываем недостающую (004) — она засеет существующего пользователя
     from db.migrate import apply_migrations
 
     applied = apply_migrations(conn)
-    assert 3 in applied
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
+    assert 4 in applied
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 4
     times = [
         r[0]
         for r in conn.execute(

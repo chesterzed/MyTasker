@@ -50,8 +50,17 @@ async def goal_text_received(
     await state.clear()
     await message.answer(texts.ADDAIM_SAVED.format(title=html.escape(title)))
 
+    if not has_access(db_user):
+        return
+
+    # Подробный план достижения цели (best effort — при сбое просто без плана)
+    await message.bot.send_chat_action(message.chat.id, "typing")
+    count = await planning.generate_plan_for_goal(db_user, goal_id, config, key_manager)
+    if count:
+        await message.answer(texts.ADDAIM_PLAN_SAVED.format(count=count))
+
     # Если день ещё не закончился — сразу подберём одну задачу на сегодня.
-    if not (has_access(db_user) and planning.has_time_left_today(db_user)):
+    if not planning.has_time_left_today(db_user):
         return
     await message.bot.send_chat_action(message.chat.id, "typing")
     added = await planning.generate_today_task_for_goal(
