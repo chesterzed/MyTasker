@@ -55,6 +55,8 @@ ALL_TASKS_EMPTY = "У тебя пока нет задач."
 
 # /today
 TODAY_HEADER = "<b>Задачи на сегодня:</b>"
+TODAY_SECTION_PRIORITY = "<b>Приоритетные:</b>"
+TODAY_SECTION_PAST = "<b>Прошлые:</b>"
 TODAY_EMPTY = (
     "Задач на сегодня нет.\n"
     "Утром я пришлю план — или просто напиши мне, что хочешь сделать."

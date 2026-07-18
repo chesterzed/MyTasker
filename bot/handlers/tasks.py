@@ -36,16 +36,41 @@ router = Router(name="tasks")
 _STATUS_ICONS = {"pending": "⬜", "done": "✅", "skipped": "⏭", "moved": "📅"}
 
 
+def _is_priority(task: sqlite3.Row) -> bool:
+    """Задача «на свой день»: активная дата совпадает с изначальной (или planned нет)."""
+    planned = task["planned_date"] if "planned_date" in task.keys() else None
+    return not planned or planned == task["date"]
+
+
 def render_task_list(
     tasks: list[sqlite3.Row], header: str
 ) -> tuple[str, InlineKeyboardMarkup | None]:
+    """Список задач с разбивкой на «Приоритетные» (даты совпадают) и «Прошлые»
+    (перенесены с прошлых дней). Текст и кнопки нумеруются по общему порядку
+    ordered = приоритетные + прошлые, поэтому номера совпадают."""
+    priority = [t for t in tasks if _is_priority(t)]
+    past = [t for t in tasks if not _is_priority(t)]
+    ordered = priority + past
+
     lines = [header]
-    for i, task in enumerate(tasks, start=1):
-        icon = _STATUS_ICONS.get(task["status"], "⬜")
-        estimate = task["estimate_minutes"] if "estimate_minutes" in task.keys() else None
-        suffix = f" · ~{estimate} мин" if estimate else ""
-        lines.append(f"{icon} {i}. {html.escape(task['title'])}{suffix}")
-    return "\n".join(lines), tasks_kb(tasks)
+    n = 0
+
+    def emit(group: list[sqlite3.Row], label: str) -> None:
+        nonlocal n
+        if not group:
+            return
+        lines.append("")
+        lines.append(label)
+        for t in group:
+            n += 1
+            icon = _STATUS_ICONS.get(t["status"], "⬜")
+            estimate = t["estimate_minutes"] if "estimate_minutes" in t.keys() else None
+            est_s = f" · ~{estimate} мин" if estimate else ""
+            lines.append(f"{icon} {n}. {html.escape(t['title'])}{est_s}{_planned_note(t)}")
+
+    emit(priority, texts.TODAY_SECTION_PRIORITY)
+    emit(past, texts.TODAY_SECTION_PAST)
+    return "\n".join(lines), tasks_kb(ordered)
 
 
 def render_all_tasks(tasks: list[sqlite3.Row], header: str) -> str:
