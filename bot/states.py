@@ -31,3 +31,8 @@ class EditProposal(StatesGroup):
 class Notifications(StatesGroup):
     waiting_for_new_time = State()       # ➕ → ждём HH:MM для нового напоминания
     waiting_for_edit_time = State()      # ✏️ → ждём HH:MM; в data: {"reminder_id": int}
+
+
+class Settings(StatesGroup):
+    waiting_for_key = State()            # /settings → Модель → claude: ждём API-ключ; data: {"model": str}
+    waiting_for_tz = State()             # /settings → Часовой пояс: ждём IANA-зону

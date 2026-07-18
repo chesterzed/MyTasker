@@ -30,6 +30,33 @@ MAX_VOICE_SECONDS = 300
 DAILY_CAPACITY_MINUTES = 480
 DEFAULT_PLANNING_CUTOFF_HOUR = 21
 
+# Сколько моделей на странице экрана /settings → Модель.
+MODELS_PER_PAGE = 5
+_VALID_PROVIDERS = ("claude", "ollama")
+# Дефолтный список моделей, если AI_MODELS не задан в .env (используемые сейчас).
+_DEFAULT_AI_MODELS = "claude:claude-opus-4-8,ollama:qwen2.5:14b"
+
+
+@dataclass(frozen=True)
+class AiModel:
+    provider: str   # 'claude' | 'ollama'
+    model: str      # id модели, он же подпись кнопки
+
+
+def _parse_ai_models(raw: str) -> tuple[AiModel, ...]:
+    """Пары 'провайдер:модель' через запятую. Split по ПЕРВОМУ ':' — модели
+    ollama сами содержат ':' (qwen2.5:14b). Битые записи молча отбрасываются."""
+    models: list[AiModel] = []
+    for item in raw.split(","):
+        item = item.strip()
+        if ":" not in item:
+            continue
+        provider, model = item.split(":", 1)
+        provider, model = provider.strip(), model.strip()
+        if provider in _VALID_PROVIDERS and model:
+            models.append(AiModel(provider=provider, model=model))
+    return tuple(models)
+
 
 @dataclass(frozen=True)
 class Config:
@@ -40,6 +67,7 @@ class Config:
     whisper_model: str
     whisper_device: str
     telegram_proxy: str | None
+    ai_models: tuple[AiModel, ...]
 
     @classmethod
     def load(cls) -> "Config":
@@ -61,6 +89,11 @@ class Config:
         # Прокси до api.telegram.org (нужен там, где Telegram недоступен напрямую).
         # Примеры: socks5://127.0.0.1:2080  или  http://127.0.0.1:8080
         telegram_proxy = os.getenv("TELEGRAM_PROXY", "").strip() or None
+        ai_models = _parse_ai_models(
+            os.getenv("AI_MODELS", "").strip() or _DEFAULT_AI_MODELS
+        )
+        if not ai_models:  # весь список оказался битым — не оставлять экран пустым
+            ai_models = _parse_ai_models(_DEFAULT_AI_MODELS)
 
         return cls(
             bot_token=bot_token,
@@ -70,4 +103,5 @@ class Config:
             whisper_model=whisper_model,
             whisper_device=whisper_device,
             telegram_proxy=telegram_proxy,
+            ai_models=ai_models,
         )

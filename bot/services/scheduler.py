@@ -219,7 +219,9 @@ async def _send_plan(db_user: sqlite3.Row) -> None:
                 order_index=i,
             )
 
-    tasks = repo.list_tasks_for_date(user_id, today)
+    tasks = repo.list_tasks_for_date(
+        user_id, today, include_done=bool(db_user["show_completed_today"])
+    )
     if not tasks:
         return
     text, kb = render_task_list(tasks, texts.MORNING_HEADER)

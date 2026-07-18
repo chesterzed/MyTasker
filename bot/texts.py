@@ -19,9 +19,7 @@ HELP = (
     "/addaim — добавить цель\n"
     "/aims — текущие цели\n"
     "/today — задачи на сегодня\n"
-    "/setkey — настроить нейросеть (API-ключ / модель)\n"
-    "/provider — переключить нейросеть (Claude / Ollama)\n"
-    "/timezone — установить часовой пояс\n"
+    "/settings — настройки: модель, часовой пояс, отображение\n"
     "/cutoff — до какого часа планировать день\n"
     "/notifications — времена напоминаний\n"
     "/cancel — отменить текущий диалог\n"
@@ -63,6 +61,31 @@ TODAY_EMPTY = (
 )
 # показывается под пустым /today: видно, по какой дате/поясу считалось «сегодня»
 TODAY_EMPTY_TZ_NOTE = "🕓 Сегодня по твоему поясу <b>{tz}</b>: {date}. Сменить пояс: /timezone"
+
+# /settings
+SETTINGS_HEADER = (
+    "<b>⚙️ Настройки</b>\n\n"
+    "• Показывать выполненные сегодня: <b>{show_completed}</b>\n"
+    "• Модель: <b>{model}</b>\n"
+    "• Часовой пояс: <b>{tz}</b>"
+)
+SETTINGS_ON = "вкл"
+SETTINGS_OFF = "выкл"
+BTN_SETTINGS_VISUAL = "🎨 Визуал"
+BTN_SETTINGS_MODEL = "🤖 Модель"
+BTN_SETTINGS_TZ = "🕓 Часовой пояс"
+BTN_SETTINGS_BACK = "⬅️ Назад"
+BTN_SETTINGS_SHOW_COMPLETED = "Отображать выполненные задачи на сегодня"
+SETTINGS_VISUAL_HEADER = "<b>🎨 Визуал</b>\n\nНастрой отображение списков задач."
+SETTINGS_MODEL_HEADER = "<b>🤖 Модель</b>\n\nВыбери нейросеть/модель:"
+SETTINGS_MODEL_ACTIVE = "✅ Активная модель: <b>{model}</b>"
+SETTINGS_ASK_KEY = "🔑 Введите API-ключ модели <b>{model}</b>.\n⚠️ Сообщение с ключом будет удалено."
+SETTINGS_KEY_SAVED = "✅ Ключ сохранён. Активная модель: <b>{model}</b>."
+SETTINGS_KEY_SAVED_DELETE_FAILED = (
+    "✅ Ключ сохранён. Активная модель: <b>{model}</b>.\n"
+    "⚠️ Не удалось удалить сообщение с ключом — удали его вручную."
+)
+SETTINGS_TZ_SAVED = "✅ Часовой пояс установлен: <b>{tz}</b>."
 
 # /timezone
 TIMEZONE_ASK = (

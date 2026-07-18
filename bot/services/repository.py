@@ -77,6 +77,19 @@ def set_ollama_model(user_id: int, model: str) -> None:
         conn.execute("UPDATE users SET ollama_model = ? WHERE id = ?", (model, user_id))
 
 
+def set_ai_model(user_id: int, model: str) -> None:
+    with _connect() as conn:
+        conn.execute("UPDATE users SET ai_model = ? WHERE id = ?", (model, user_id))
+
+
+def set_show_completed_today(user_id: int, value: bool) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE users SET show_completed_today = ? WHERE id = ?",
+            (1 if value else 0, user_id),
+        )
+
+
 # ── goals ────────────────────────────────────────────────────────
 
 def add_goal(
@@ -185,12 +198,15 @@ def add_task(
         return cur.lastrowid
 
 
-def list_tasks_for_date(user_id: int, date: str) -> list[sqlite3.Row]:
+def list_tasks_for_date(
+    user_id: int, date: str, include_done: bool = True
+) -> list[sqlite3.Row]:
+    query = "SELECT * FROM tasks WHERE user_id = ? AND date = ?"
+    if not include_done:
+        query += " AND status != 'done'"
+    query += " ORDER BY order_index, id"
     with _connect() as conn:
-        return conn.execute(
-            "SELECT * FROM tasks WHERE user_id = ? AND date = ? ORDER BY order_index, id",
-            (user_id, date),
-        ).fetchall()
+        return conn.execute(query, (user_id, date)).fetchall()
 
 
 def list_all_tasks(user_id: int) -> list[sqlite3.Row]:

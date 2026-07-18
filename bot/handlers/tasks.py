@@ -50,6 +50,11 @@ def render_task_list(
     ordered = приоритетные + прошлые, поэтому номера совпадают."""
     priority = [t for t in tasks if _is_priority(t)]
     past = [t for t in tasks if not _is_priority(t)]
+    # прошлые — от новых к старым по изначальной дате (planned_date)
+    past.sort(
+        key=lambda t: (t["planned_date"] if "planned_date" in t.keys() else None) or t["date"],
+        reverse=True,
+    )
     ordered = priority + past
 
     lines = [header]
@@ -102,8 +107,10 @@ async def on_task_done(
 
     repo.mark_task_done(task["id"], today_local(db_user))
 
-    # Перерисовать список в том же сообщении, сохранив его заголовок
-    tasks = repo.list_tasks_for_date(db_user["id"], task["date"])
+    # Перерисовать список в том же сообщении, сохранив его заголовок.
+    # Фильтр выполненных применяем только к сегодняшнему списку.
+    include_done = bool(db_user["show_completed_today"]) or task["date"] != today_local(db_user)
+    tasks = repo.list_tasks_for_date(db_user["id"], task["date"], include_done=include_done)
     header = texts.TODAY_HEADER
     if callback.message and callback.message.html_text:
         header = callback.message.html_text.split("\n")[0]

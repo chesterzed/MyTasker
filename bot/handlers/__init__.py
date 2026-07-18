@@ -16,6 +16,7 @@ def build_root_router() -> Router:
         plans,
         proposals,
         setkey,
+        settings,
         tasks,
         voice,
     )
@@ -24,6 +25,7 @@ def build_root_router() -> Router:
     root.include_router(commands.router)
     root.include_router(addaim.router)
     root.include_router(setkey.router)
+    root.include_router(settings.router)
     root.include_router(notifications.router)
     root.include_router(proposals.router)
     root.include_router(tasks.router)

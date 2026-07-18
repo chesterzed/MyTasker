@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from ai.base import BaseAIClient, ChatMessage
-from ai.claude_client import ClaudeClient
+from ai.claude_client import DEFAULT_CLAUDE_MODEL, ClaudeClient
 from ai.key_manager import KeyManager, KeyManagerError
 from ai.ollama_client import OllamaClient
 from bot.config import DAILY_CAPACITY_MINUTES, HISTORY_LIMIT, MAX_ACTIONS, Config
@@ -35,10 +35,16 @@ class ClientConfigError(Exception):
     """Провайдер пользователя не настроен (нет ключа / модели)."""
 
 
+def _selected_model(db_user: sqlite3.Row) -> str | None:
+    """Модель, выбранная в /settings (колонка ai_model); None у старых записей."""
+    return db_user["ai_model"] if "ai_model" in db_user.keys() else None
+
+
 def build_client(db_user: sqlite3.Row, config: Config, key_manager: KeyManager) -> BaseAIClient:
     provider = db_user["ai_provider"]
+    model = _selected_model(db_user)
     if provider == "ollama":
-        model = db_user["ollama_model"]
+        model = model or db_user["ollama_model"]   # фолбэк на старую колонку
         if not model:
             raise ClientConfigError("ollama model is not set")
         return OllamaClient(default_model=model, host=config.ollama_host)
@@ -46,7 +52,7 @@ def build_client(db_user: sqlite3.Row, config: Config, key_manager: KeyManager) 
         api_key = key_manager.get_active_key(db_user["id"], "claude")
     except KeyManagerError as exc:
         raise ClientConfigError(str(exc)) from exc
-    return ClaudeClient(api_key=api_key)
+    return ClaudeClient(api_key=api_key, default_model=model or DEFAULT_CLAUDE_MODEL)
 
 
 # ── сборка контекста ─────────────────────────────────────────────

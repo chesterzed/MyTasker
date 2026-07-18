@@ -84,7 +84,9 @@ async def cmd_cancel(message: Message, state: FSMContext) -> None:
 @router.message(Command("today"))
 async def cmd_today(message: Message, db_user: sqlite3.Row) -> None:
     today = today_local(db_user)
-    tasks = repo.list_tasks_for_date(db_user["id"], today)
+    tasks = repo.list_tasks_for_date(
+        db_user["id"], today, include_done=bool(db_user["show_completed_today"])
+    )
     if not tasks:
         note = texts.TODAY_EMPTY_TZ_NOTE.format(
             tz=html.escape(db_user["timezone"] or "UTC"), date=today

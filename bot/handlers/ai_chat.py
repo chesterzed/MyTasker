@@ -48,7 +48,9 @@ async def _run_query(message: Message, db_user: sqlite3.Row, query: dict) -> Non
     name = query["name"]
     if name == "list_tasks":
         date = query["date"]
-        tasks = repo.list_tasks_for_date(db_user["id"], date)
+        # фильтр выполненных — только для сегодняшней даты
+        include_done = date != today_local(db_user) or bool(db_user["show_completed_today"])
+        tasks = repo.list_tasks_for_date(db_user["id"], date, include_done=include_done)
         if not tasks:
             await message.answer(texts.TASKS_ON_DATE_EMPTY.format(date=html.escape(date)))
             return

@@ -50,6 +50,11 @@ class StepCb(CallbackData, prefix="step"):
     step_id: int
 
 
+class SettingsCb(CallbackData, prefix="st"):
+    action: str        # "root" | "visual" | "vis_toggle" | "model" | "pick" | "tz"
+    arg: int = 0       # model: номер страницы; pick: индекс модели в config.ai_models
+
+
 def proposal_kb(
     pa_id: int, actions: list[dict], done: list[bool]
 ) -> InlineKeyboardMarkup | None:
@@ -147,6 +152,58 @@ def plan_kb(goal_id: int, steps: list[sqlite3.Row]) -> InlineKeyboardMarkup:
     )
     controls.adjust(2)
     b.attach(controls)
+    return b.as_markup()
+
+
+def settings_root_kb() -> InlineKeyboardMarkup:
+    b = InlineKeyboardBuilder()
+    b.button(text=texts.BTN_SETTINGS_VISUAL, callback_data=SettingsCb(action="visual"))
+    b.button(text=texts.BTN_SETTINGS_MODEL, callback_data=SettingsCb(action="model", arg=0))
+    b.button(text=texts.BTN_SETTINGS_TZ, callback_data=SettingsCb(action="tz"))
+    b.adjust(1)
+    return b.as_markup()
+
+
+def settings_visual_kb(show_completed: bool) -> InlineKeyboardMarkup:
+    b = InlineKeyboardBuilder()
+    b.button(text=texts.BTN_SETTINGS_BACK, callback_data=SettingsCb(action="root"))
+    mark = "✅" if show_completed else "⬜"
+    b.button(
+        text=f"{mark} {texts.BTN_SETTINGS_SHOW_COMPLETED}",
+        callback_data=SettingsCb(action="vis_toggle"),
+    )
+    b.adjust(1)
+    return b.as_markup()
+
+
+def settings_model_kb(models: list, page: int, per_page: int) -> InlineKeyboardMarkup:
+    """Кнопка «Назад» (в root) + до per_page моделей текущей страницы + ряд
+    пагинации ◀️/▶️ (только доступные направления). callback pick.arg = глобальный
+    индекс модели в списке config.ai_models."""
+    b = InlineKeyboardBuilder()
+    b.button(text=texts.BTN_SETTINGS_BACK, callback_data=SettingsCb(action="root"))
+    start = page * per_page
+    for gi in range(start, min(start + per_page, len(models))):
+        b.button(
+            text=models[gi].model, callback_data=SettingsCb(action="pick", arg=gi)
+        )
+    b.adjust(1)
+
+    nav = InlineKeyboardBuilder()
+    if page > 0:
+        nav.button(text="◀️", callback_data=SettingsCb(action="model", arg=page - 1))
+    if start + per_page < len(models):
+        nav.button(text="▶️", callback_data=SettingsCb(action="model", arg=page + 1))
+    if nav.buttons:
+        nav.adjust(2)
+        b.attach(nav)
+    return b.as_markup()
+
+
+def settings_back_kb() -> InlineKeyboardMarkup:
+    """Одна кнопка «Назад» в root — для экранов ввода (ключ / часовой пояс)."""
+    b = InlineKeyboardBuilder()
+    b.button(text=texts.BTN_SETTINGS_BACK, callback_data=SettingsCb(action="root"))
     return b.as_markup()
 
 
