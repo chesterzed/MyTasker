@@ -77,6 +77,15 @@ def register_user_jobs(db_user: sqlite3.Row) -> None:
             replace_existing=True,
         )
 
+    # Ночной перенос незакрытых задач на новый день (00:01 местного времени)
+    _scheduler.add_job(
+        rollover_job,
+        CronTrigger(hour=0, minute=1, timezone=tz),
+        id=f"rollover_{uid}",
+        args=(uid,),
+        replace_existing=True,
+    )
+
 
 def register_all_users() -> None:
     for user in repo.get_all_users():
@@ -106,6 +115,24 @@ _CHECKIN_HEADERS = {
     "deadline": texts.REMINDER_DEADLINE,
     "summary": texts.REMINDER_SUMMARY,
 }
+
+
+async def rollover_job(user_id: int) -> None:
+    try:
+        await _rollover_job(user_id)
+    except Exception:
+        logger.exception("rollover_job failed for user %s", user_id)
+
+
+async def _rollover_job(user_id: int) -> None:
+    """00:01 местного времени: переносим просроченные незакрытые задачи на сегодня.
+    Без сообщения пользователю — их покажет утреннее напоминание."""
+    db_user = repo.get_user(user_id)
+    if db_user is None:
+        return
+    moved = repo.roll_over_tasks(user_id, today_local(db_user))
+    if moved:
+        logger.info("rolled over %s tasks to today for user %s", moved, user_id)
 
 
 async def reminder_job(reminder_id: int) -> None:

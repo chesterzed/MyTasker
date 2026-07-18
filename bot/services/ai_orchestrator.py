@@ -112,12 +112,20 @@ def _today_tasks_estimates_block(user_id: int, date: str) -> str:
     return "\n".join(lines)
 
 
+def _carried_note(task: sqlite3.Row) -> str:
+    """« (перенесена с YYYY-MM-DD)» для задачи, чья активная дата ушла вперёд."""
+    planned = task["planned_date"] if "planned_date" in task.keys() else None
+    if planned and planned != task["date"]:
+        return f" (перенесена с {planned})"
+    return ""
+
+
 def _tasks_block(user_id: int, date: str) -> str:
     tasks = repo.list_tasks_for_date(user_id, date)
     if not tasks:
         return prompts.TASKS_EMPTY
     return "\n".join(
-        f"[task_id={t['id']}] {t['title']} — {t['status']}" for t in tasks
+        f"[task_id={t['id']}] {t['title']} — {t['status']}{_carried_note(t)}" for t in tasks
     )
 
 

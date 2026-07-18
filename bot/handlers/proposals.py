@@ -27,7 +27,7 @@ from bot.services import ai_orchestrator as orchestrator
 from bot.services import prompts
 from bot.services import repository as repo
 from bot.states import EditProposal
-from bot.utils import truncate
+from bot.utils import today_local, truncate
 
 logger = logging.getLogger(__name__)
 router = Router(name="proposals")
@@ -91,7 +91,7 @@ async def on_apply(
         await callback.answer(texts.ACTION_ALREADY_APPLIED)
         return
 
-    actions_service.apply_all(db_user["id"], [actions[idx]])
+    actions_service.apply_all(db_user["id"], [actions[idx]], today_local(db_user))
     done[idx] = True
     if all(done):
         repo.resolve_pending(pa["id"], "confirmed")
@@ -116,7 +116,7 @@ async def on_apply_all(
     done = payload.setdefault("done", [False] * len(actions))
     remaining = [a for a, d in zip(actions, done) if not d]
     if remaining:
-        actions_service.apply_all(db_user["id"], remaining)
+        actions_service.apply_all(db_user["id"], remaining, today_local(db_user))
     payload["done"] = [True] * len(actions)
     repo.resolve_pending(pa["id"], "confirmed")
 

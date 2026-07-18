@@ -160,7 +160,11 @@ def add_task(
     source: str = "user",
     order_index: int | None = None,
     estimate_minutes: int | None = None,
+    planned_date: str | None = None,
 ) -> int:
+    # planned_date — «первая» (неизменяемая) дата: на какой день поставлена.
+    # При создании по умолчанию совпадает с date («второй», активной).
+    planned_date = planned_date or date
     with _connect() as conn:
         if order_index is None:
             order_index = conn.execute(
@@ -170,9 +174,13 @@ def add_task(
             ).fetchone()[0]
         cur = conn.execute(
             "INSERT INTO tasks "
-            "(user_id, goal_id, title, description, date, order_index, source, estimate_minutes) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (user_id, goal_id, title, description, date, order_index, source, estimate_minutes),
+            "(user_id, goal_id, title, description, date, planned_date, order_index, "
+            "source, estimate_minutes) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                user_id, goal_id, title, description, date, planned_date, order_index,
+                source, estimate_minutes,
+            ),
         )
         return cur.lastrowid
 
@@ -199,17 +207,38 @@ def get_task(task_id: int) -> sqlite3.Row | None:
         return conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
 
 
-def mark_task_done(task_id: int) -> None:
+def mark_task_done(task_id: int, done_date: str | None = None) -> None:
+    """Отметить выполненной. done_date (сегодня по поясу пользователя) замораживает
+    «вторую» (активную) дату на дне выполнения — важно при досрочном закрытии
+    задачи, назначенной на будущее."""
     with _connect() as conn:
-        conn.execute(
-            "UPDATE tasks SET status = 'done', completed_at = ? WHERE id = ?",
-            (_now(), task_id),
-        )
+        if done_date is None:
+            conn.execute(
+                "UPDATE tasks SET status = 'done', completed_at = ? WHERE id = ?",
+                (_now(), task_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE tasks SET status = 'done', completed_at = ?, date = ? WHERE id = ?",
+                (_now(), done_date, task_id),
+            )
 
 
 def set_task_date(task_id: int, new_date: str) -> None:
     with _connect() as conn:
         conn.execute("UPDATE tasks SET date = ? WHERE id = ?", (new_date, task_id))
+
+
+def roll_over_tasks(user_id: int, today: str) -> int:
+    """Переносит просроченные незакрытые задачи (date < today) на сегодня.
+    «Первая» дата (planned_date) не меняется. Возвращает число перенесённых."""
+    with _connect() as conn:
+        cur = conn.execute(
+            "UPDATE tasks SET date = ? "
+            "WHERE user_id = ? AND status IN ('pending', 'moved') AND date < ?",
+            (today, user_id, today),
+        )
+        return cur.rowcount
 
 
 _TASK_UPDATABLE = ("title", "description", "estimate_minutes")

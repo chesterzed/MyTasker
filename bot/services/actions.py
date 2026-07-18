@@ -308,8 +308,11 @@ def render_proposal_text(payload: dict) -> str:
     return "\n".join(lines)
 
 
-def apply_all(user_id: int, actions: list[dict]) -> list[str]:
-    """Применяет подтверждённые действия; возвращает строки результата (HTML)."""
+def apply_all(user_id: int, actions: list[dict], today: str | None = None) -> list[str]:
+    """Применяет подтверждённые действия; возвращает строки результата (HTML).
+
+    today (сегодня по поясу пользователя) прокидывается в complete_task, чтобы
+    «вторая» дата задачи замерла на дне выполнения."""
     results = []
     for action in actions:
         type_ = action["type"]
@@ -376,7 +379,7 @@ def apply_all(user_id: int, actions: list[dict]) -> list[str]:
             results.append(texts.RESULT_TASK_DELETED.format(title=title))
         elif type_ == "complete_task":
             task = repo.get_task(action["task_id"])
-            repo.mark_task_done(action["task_id"])
+            repo.mark_task_done(action["task_id"], today)
             title = html.escape(task["title"]) if task else f"#{action['task_id']}"
             results.append(texts.RESULT_TASK_COMPLETED.format(title=title))
         elif type_ == "reschedule":

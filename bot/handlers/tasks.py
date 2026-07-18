@@ -17,6 +17,19 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup
 from bot import texts
 from bot.keyboards import TaskCb, tasks_kb
 from bot.services import repository as repo
+from bot.utils import today_local
+
+
+def _planned_note(task: sqlite3.Row) -> str:
+    """« (изначально на DD.MM)», если задача переносилась (planned_date != date)."""
+    planned = task["planned_date"] if "planned_date" in task.keys() else None
+    if planned and planned != task["date"]:
+        try:
+            d = planned[8:10] + "." + planned[5:7]  # YYYY-MM-DD → DD.MM
+        except (TypeError, IndexError):
+            return ""
+        return f" <i>(изначально на {d})</i>"
+    return ""
 
 router = Router(name="tasks")
 
@@ -46,7 +59,7 @@ def render_all_tasks(tasks: list[sqlite3.Row], header: str) -> str:
             current_date = task["date"]
             lines.append(f"\n<b>{html.escape(current_date)}</b>")
         icon = _STATUS_ICONS.get(task["status"], "⬜")
-        lines.append(f"{icon} {html.escape(task['title'])}")
+        lines.append(f"{icon} {html.escape(task['title'])}{_planned_note(task)}")
     return "\n".join(lines)
 
 
@@ -62,7 +75,7 @@ async def on_task_done(
         await callback.answer(texts.TASK_ALREADY_DONE)
         return
 
-    repo.mark_task_done(task["id"])
+    repo.mark_task_done(task["id"], today_local(db_user))
 
     # Перерисовать список в том же сообщении, сохранив его заголовок
     tasks = repo.list_tasks_for_date(db_user["id"], task["date"])

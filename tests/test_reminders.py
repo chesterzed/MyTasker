@@ -104,7 +104,8 @@ def test_reminders_migration_seeds_existing_users(tmp_path: Path):
 
     applied = apply_migrations(conn)
     assert 4 in applied
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 4
+    # 004 и все последующие миграции накатываются за один проход
+    assert conn.execute("PRAGMA user_version").fetchone()[0] >= 4
     times = [
         r[0]
         for r in conn.execute(
